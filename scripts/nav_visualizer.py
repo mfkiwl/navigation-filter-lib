@@ -393,7 +393,7 @@ if __name__ == "__main__":
     parser.add_argument('--track', type=str, default="../data/track.dat",
                         help='Path to reference trajectory file')
     parser.add_argument('--output', type=str, default=None,
-                        help='Output directory for saving figures')
+                        help='Output directory for saving figures (default: ../output)')
     parser.add_argument('--save', action='store_true',
                         help='Save figures without display (requires --output)')
     parser.add_argument('--imu-rate', type=float, default=200.0,
@@ -403,6 +403,9 @@ if __name__ == "__main__":
     
     # Parse command-line arguments
     args = parser.parse_args()
+    
+    if args.save and args.output is None:
+        args.output = "../output"
     
     # Validate and prepare output directory
     if args.output:
@@ -441,7 +444,7 @@ if __name__ == "__main__":
     # Generate and display/save visualizations
     print("Generating navigation visualizations...")
     visualize_results(state, track, 
-                      output_dir=args.output if args.save else None,
+                      output_dir=args.output,
                       imu_rate=args.imu_rate,
                       sim_time=args.sim_time)
     print("Visualization process completed")
