@@ -24,17 +24,17 @@
 struct NavigationParams {
     // Earth parameters
     double Re = 6378135.072;          ///< Equatorial radius (meters)
-    double e = 1.0/298.257223563;     ///< Earth's flattening coefficient
+    double e = 1.0/298.257223563;     ///< Earth's flattening coefficient (dimensionless)
     double W_ie = 7.292115147e-5;     ///< Earth rotation rate (rad/s)
     
     // Gravity model parameters
     double g0 = 9.7803267714;         ///< Gravity at equator (m/s²)
-    double gk1 = 0.00193185138639;    ///< Gravity formula constant
-    double gk2 = 0.00669437999013;    ///< Gravity formula constant
+    double gk1 = 0.00193185138639;    ///< Gravity formula constant (dimensionless)
+    double gk2 = 0.00669437999013;    ///< Gravity formula constant (dimensionless)
     
     // Earth curvature radii
-    double Rx = 0.0;                  ///< Meridian radius of curvature
-    double Ry = 0.0;                  ///< Prime vertical radius of curvature
+    double Rx = 0.0;                  ///< Meridian radius of curvature (meters)
+    double Ry = 0.0;                  ///< Prime vertical radius of curvature (meters)
 };
 
 /**
@@ -58,11 +58,11 @@ struct NavigationState {
     std::vector<double> Yaw;           ///< Yaw angle (degrees)
     
     // Orientation matrices
-    Eigen::Matrix3d CbtM;              ///< Body to navigation frame DCM
-    Eigen::Matrix3d CtbM;              ///< Navigation to body frame DCM
+    Eigen::Matrix3d CbtM;              ///< Body to navigation frame DCM (dimensionless)
+    Eigen::Matrix3d CtbM;              ///< Navigation to body frame DCM (dimensionless)
     
     // Attitude quaternion
-    Eigen::Vector4d Quaternion;        ///< Attitude quaternion [w, x, y, z]
+    Eigen::Vector4d Quaternion;        ///< Attitude quaternion [w, x, y, z] (dimensionless)
 };
 
 /**
@@ -72,38 +72,40 @@ struct NavigationState {
  * for a Kalman filter implementation.
  */
 struct KalmanFilterParams {
-    int N;  ///< IMU/GPS update rate ratio
-    int M;  ///< Number of Kalman filter points
+    int N;  ///< IMU/GPS update rate ratio (dimensionless)
+    int M;  ///< Number of Kalman filter points (dimensionless)
     double T;  ///< Kalman filter period (seconds)
     
     // Noise matrices
-    Eigen::MatrixXd R;  ///< Measurement noise covariance matrix
-    Eigen::MatrixXd Q;  ///< Process noise covariance matrix
+    Eigen::MatrixXd R;  ///< Measurement noise covariance matrix (units vary by sensor)
+    Eigen::MatrixXd Q;  ///< Process noise covariance matrix (units vary by state)
     
     // Covariance matrix
-    Eigen::MatrixXd P;  ///< State estimation error covariance matrix
+    Eigen::MatrixXd P;  ///< State estimation error covariance matrix (units vary by state)
     
     // State and measurement vectors
-    Eigen::MatrixXd X;  ///< State vector
-    Eigen::MatrixXd Z;  ///< Measurement vector
+    Eigen::MatrixXd X;  ///< State vector (units vary by state)
+    Eigen::MatrixXd Z;  ///< Measurement vector (units vary by sensor)
     
     // Result storage
-    Eigen::MatrixXd Xsave;             ///< Saved state estimates
-    Eigen::MatrixXd P_mean_square;     ///< Mean square covariance
+    Eigen::MatrixXd Xsave;             ///< Saved state estimates (units vary by state)
+    Eigen::MatrixXd P_mean_square;     ///< Mean square covariance (units vary by state)
     
-    int N_kalman = 2;  ///< Update counter
+    int N_kalman = 2;  ///< Update counter (dimensionless)
 };
 
 /**
  * @brief IMU measurement data container
  * 
  * Stores raw IMU measurements including gyroscope and accelerometer data.
+ * 
+ * NOTE: All gyroscope measurements are in rad/s, accelerometer in m/s²
  */
 struct IMUData {
-    std::vector<int> index;        ///< Measurement indices
-    std::vector<double> gx;        ///< Gyroscope X-axis measurements (deg/s)
-    std::vector<double> gy;        ///< Gyroscope Y-axis measurements (deg/s)
-    std::vector<double> gz;        ///< Gyroscope Z-axis measurements (deg/s)
+    std::vector<int> index;        ///< Measurement indices (dimensionless)
+    std::vector<double> gx;        ///< Gyroscope X-axis measurements (rad/s)
+    std::vector<double> gy;        ///< Gyroscope Y-axis measurements (rad/s)
+    std::vector<double> gz;        ///< Gyroscope Z-axis measurements (rad/s)
     std::vector<double> ax;        ///< Accelerometer X-axis measurements (m/s²)
     std::vector<double> ay;        ///< Accelerometer Y-axis measurements (m/s²)
     std::vector<double> az;        ///< Accelerometer Z-axis measurements (m/s²)

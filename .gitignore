@@ -1,5 +1,6 @@
 # data
-data/
+data/*.dat
+output/
 
 # 忽略构建目录
 build/

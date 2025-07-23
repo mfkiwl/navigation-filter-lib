@@ -18,7 +18,7 @@
  */
 void SaveResults::saveNavigationResults(const NavigationState& state, const IMUData& imu) {
     // Open output file
-    std::ofstream outFile("../data/KF_navoutQ.dat");
+    std::ofstream outFile("../output/KF_navoutQ.dat");
     if (!outFile) {
         std::cerr << "Error: Unable to open output file: KF_navoutQ.dat" << std::endl;
         return;
