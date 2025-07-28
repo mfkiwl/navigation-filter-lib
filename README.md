@@ -22,7 +22,7 @@ A modular C++17 framework for Inertial Navigation System (INS) + GNSS loosel
 * **GPS horizontal position**: ±3 m
 * **GPS vertical position**: ±3 m
 * **GPS velocity**: ±0.01 m/s per axis
-* **Gyroscope bias / white‑noise**: 0.01 rad/s each
+* **Gyroscope bias / white‑noise**: 0.01 deg/h each
 * **Accelerometer bias / white‑noise**: 50 µg each
 
 All random seeds are fixed, guaranteeing run‑to‑run repeatability.
