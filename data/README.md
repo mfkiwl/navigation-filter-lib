@@ -50,8 +50,8 @@ This dataset contains synthetically generated inertial navigation and GPS measur
 
 ### IMU Measurement Noise
 - **Gyroscope**:
-  - Bias: 0.01 rad/s
-  - White noise: 0.01 rad/s (1σ)
+  - Bias: 0.01 deg/h
+  - White noise: 0.01 deg/h (1σ)
 - **Accelerometer**:
   - Bias: 50 μg
   - White noise: 50μg (1σ)
