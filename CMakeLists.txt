@@ -47,13 +47,23 @@ target_link_libraries(DataLoader MathUtils)
 target_include_directories(DataLoader PUBLIC include)
 
 # SystemInitializer library (initializes navigation parameters and state)
-add_library(SystemInitializer src/SystemInitializer.cpp)
+add_library(SystemInitializer 
+    src/initializers/KfInitializer.cpp
+)
 target_link_libraries(SystemInitializer MathUtils DataLoader)
-target_include_directories(SystemInitializer PUBLIC include)
+target_include_directories(SystemInitializer 
+    PUBLIC 
+    include
+    include/initializers
+)
 
 # NavigationCore library (core navigation algorithms and Kalman filtering)
 add_library(NavigationCore src/NavigationCore.cpp)
-target_link_libraries(NavigationCore MathUtils DataLoader SystemInitializer)
+target_link_libraries(NavigationCore 
+    MathUtils 
+    DataLoader 
+    SystemInitializer
+)
 target_include_directories(NavigationCore PUBLIC include)
 
 # SaveResults library (handles saving of navigation results)
@@ -73,15 +83,6 @@ target_link_libraries(main_app
 set_target_properties(main_app PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
 )
-
-# Optional installation configuration
-# install(TARGETS main_app
-#     RUNTIME DESTINATION bin
-# )
-# 
-# install(DIRECTORY include/ DESTINATION include
-#     FILES_MATCHING PATTERN "*.hpp"
-# )
 
 # Print configuration summary
 message(STATUS "=============================================")

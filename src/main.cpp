@@ -13,11 +13,13 @@
  */
 
 #include "DataLoader.hpp"
-#include "SystemInitializer.hpp"
-#include "NavigationCore.hpp"
+#include "initializers/KfInitializer.hpp"
+#include "core/NavigationCore.hpp"
 #include "SaveResults.hpp"
+#include "NavigationParams.hpp"
 #include <iostream>
 #include <random>
+#include <iomanip>
 
 int main() {
     // Initialize random number generator with fixed seed for reproducibility
@@ -27,6 +29,7 @@ int main() {
     const int IMUrate = 200;     ///< IMU sampling rate (Hz)
     const int GPSrate = 20;      ///< GPS sampling rate (Hz)
     const double simTime = 600;  ///< Total simulation time (seconds)
+    const std::string dataDir = "../data";  ///< 数据目录
     
     // Print system configuration
     std::cout << "=== Integrated Navigation System Startup ===" << std::endl;
@@ -40,7 +43,7 @@ int main() {
     IMUData imu;
     GPSData gps;
     TrajectoryData track;
-    DataLoader::loadData("../data", IMUrate, simTime, imu, gps, track);
+    DataLoader::loadData(dataDir, IMUrate, simTime, imu, gps, track);
     std::cout << "Data loading completed: " << std::endl;
     std::cout << "  IMU points: " << imu.index.size() << std::endl;
     std::cout << "  GPS points: " << gps.time.size() << std::endl;
@@ -48,10 +51,20 @@ int main() {
     
     // Initialize navigation system
     std::cout << "\nInitializing navigation system..." << std::endl;
-    NavigationParams params;     ///< Navigation physical parameters
-    NavigationState state;       ///< Navigation state variables
-    KalmanFilterParams kalman;   ///< Kalman filter parameters
-    SystemInitializer::initializeSystem(IMUrate, GPSrate, simTime, "../data", params, state, kalman);
+    
+    // 创建初始化器
+    KfInitializer initializer(IMUrate, GPSrate, simTime);
+    
+    // 创建参数对象 - 使用 KfParams 类型
+    KfParams params;             ///< 导航参数（包含地球参数和KF参数）
+    NavigationState state;       ///< 导航状态
+    
+    // 初始化参数、状态和KF参数
+    int totalPoints = simTime * IMUrate + 1;
+    initializer.initialize_params(params, dataDir);
+    initializer.initialize_state(state, totalPoints);
+    initializer.initialize_kalman(params.kalman_params, totalPoints);
+    
     std::cout << "System initialization completed" << std::endl;
     std::cout << "Initial State: " << std::endl;
     std::cout << "  Latitude: " << state.Latitude[0] << "°" << std::endl;
@@ -61,9 +74,24 @@ int main() {
     std::cout << "  Roll: " << state.Roll[0] << "°" << std::endl;
     std::cout << "  Yaw: " << state.Yaw[0] << "°" << std::endl;
     
+    // 打印地球参数
+    std::cout << "\nEarth Parameters:" << std::endl;
+    std::cout << "  Re: " << params.earth_params.Re << " m" << std::endl;
+    std::cout << "  e: " << params.earth_params.e << std::endl;
+    std::cout << "  W_ie: " << params.earth_params.W_ie << " rad/s" << std::endl;
+    std::cout << "  g0: " << params.earth_params.g0 << " m/s²" << std::endl;
+    
+    // 打印KF参数
+    std::cout << "\nKalman Filter Parameters:" << std::endl;
+    std::cout << "  N: " << params.kalman_params.N << std::endl;
+    std::cout << "  M: " << params.kalman_params.M << std::endl;
+    std::cout << "  T: " << params.kalman_params.T << " s" << std::endl;
+    std::cout << "  P matrix size: " << params.kalman_params.P.rows() 
+              << "x" << params.kalman_params.P.cols() << std::endl;
+    
     // Run navigation algorithm
     std::cout << "\nRunning navigation algorithm..." << std::endl;
-    NavigationCore::runNavigation(imu, gps, params, state, kalman, IMUrate, GPSrate);
+    NavigationCore::runNavigation(imu, gps, params.earth_params, state, params.kalman_params, IMUrate, GPSrate);
     std::cout << "\nNavigation algorithm completed" << std::endl;
     
     // Save navigation results

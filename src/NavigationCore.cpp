@@ -8,7 +8,7 @@
  * @version 0.1
  */
 
-#include "NavigationCore.hpp"
+#include "core/NavigationCore.hpp"
 #include "MathUtils.hpp"
 #include <cmath>
 #include <iostream>
