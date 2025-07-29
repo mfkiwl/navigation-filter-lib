@@ -1,6 +1,6 @@
 /**
  * @file KalmanFilterNavigation.hpp
- * @brief Kalman filter implementation for navigation
+ * @brief Kalman filter based navigation implementation
  *
  * @author peanut-nav
  * @date Created: 2025-07-22
@@ -9,34 +9,34 @@
  */
 
 #pragma once
-#include "core/NavigationFilterBase.hpp"
+#include "core/NavigationBase.hpp"
 #include "NavigationParams.hpp"
+#include <Eigen/Dense>
+#include <vector>
 
-class KalmanFilterNavigation : public NavigationFilterBase {
+class KalmanFilterNavigation : public NavigationBase {
 public:
     KalmanFilterNavigation() = default;
     
-    // NavigationFilterBase interface implementation
+    // NavigationBase interface implementation
     void initialize(const NavParamsBase& base_params, 
                    NavigationState& state) override;
     
-    void updateStrapdown(const IMUData& imu) override;
+    void updateStrapdown(const IMUData& imu, int i) override;
     
-    void predictState() override;
+    void predictState(int i) override;
     
-    void updateMeasurement(const GPSData& measurement) override;
+    void updateMeasurement(const GPSData& gps, int i) override;
     
-    void correctErrors() override;
+    void correctErrors(int i) override;
     
     NavigationState& getState() override { return state_; }
     
     void advance() override;
     
-    bool isMeasurementStep() const override;
+    bool isMeasurementStep(int i) const override;
     
-    std::string getType() const override { return "Kalman Filter"; }
-    
-    int getCurrentIndex() const override { return current_index_; }
+    void run(const IMUData& imu, const GPSData& gps) override;
 
 private:
     // Configuration
@@ -64,9 +64,10 @@ private:
     void updateVelocityPosition(const Eigen::Vector3d& f_INSt);
     
     // Kalman filter components
-    void computeStateTransitionMatrix();
-    void computeMeasurementMatrix();
-    void runKalmanUpdate();
+    void computeStateTransitionMatrix(int i);
+    void computeMeasurementMatrix(int i);
+    void runKalmanPrediction(int i);
+    void runKalmanUpdate(int i, const Eigen::VectorXd& Z);
     
     // Algorithm implementations
     void strapdownAttitudeUpdate(const Eigen::Vector3d& wtb_b,
@@ -95,11 +96,6 @@ private:
                                         double& Rx,
                                         double& Ry);
     
-    void computeEulerAngles(const Eigen::Matrix3d& CbtM,
-                           double& pitch,
-                           double& roll,
-                           double& yaw);
-    
     double computeGravity(double Latitude, double h, const NavigationParams& params);
     
     Eigen::MatrixXd kalmanComputeStateMatrix(double Latitude,
@@ -119,15 +115,20 @@ private:
                                                   double Rx,
                                                   double Ry);
     
-    void kalmanFilterStep(const Eigen::VectorXd& X_prev,
-                          const Eigen::MatrixXd& P_prev,
+    void kalmanPredictStep(const Eigen::VectorXd& X_prev,
+                           const Eigen::MatrixXd& P_prev,
+                           const Eigen::MatrixXd& A,
+                           const Eigen::MatrixXd& B,
+                           const Eigen::MatrixXd& Q,
+                           double T,
+                           Eigen::VectorXd& X_pred,
+                           Eigen::MatrixXd& P_pred);
+    
+    void kalmanUpdateStep(const Eigen::VectorXd& X_pred,
+                          const Eigen::MatrixXd& P_pred,
                           const Eigen::VectorXd& Z,
                           const Eigen::MatrixXd& H,
                           const Eigen::MatrixXd& R,
-                          const Eigen::MatrixXd& Q,
-                          double T,
-                          const Eigen::MatrixXd& A,
-                          const Eigen::MatrixXd& B,
                           Eigen::VectorXd& X_new,
                           Eigen::MatrixXd& P_new);
 };

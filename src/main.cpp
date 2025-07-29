@@ -14,7 +14,7 @@
 
 #include "DataLoader.hpp"
 #include "initializers/KfInitializer.hpp"
-#include "core/NavigationCore.hpp"
+#include "core/KfNavigation.hpp"  // 更新为新的导航核心头文件
 #include "SaveResults.hpp"
 #include "NavigationParams.hpp"
 #include <iostream>
@@ -89,10 +89,22 @@ int main() {
     std::cout << "  P matrix size: " << params.kalman_params.P.rows() 
               << "x" << params.kalman_params.P.cols() << std::endl;
     
+    // ================== 导航解算部分更新 ==================
     // Run navigation algorithm
     std::cout << "\nRunning navigation algorithm..." << std::endl;
-    NavigationCore::runNavigation(imu, gps, params.earth_params, state, params.kalman_params, IMUrate, GPSrate);
+    
+    // 创建并初始化卡尔曼滤波导航对象
+    KalmanFilterNavigation nav;
+    nav.initialize(params, state);  // 使用新的初始化接口
+    
+    // 执行导航解算
+    nav.run(imu, gps);
+    
+    // 更新状态引用（如果需要）
+    state = nav.getState();
+    
     std::cout << "\nNavigation algorithm completed" << std::endl;
+    // ================== 导航解算部分更新结束 ==================
     
     // Save navigation results
     std::cout << "\nSaving navigation results..." << std::endl;

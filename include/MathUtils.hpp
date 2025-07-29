@@ -121,4 +121,59 @@ Eigen::Matrix<T, 4, 1> eulerToQuaternion(T roll_deg, T pitch_deg, T yaw_deg) {
     return quat;
 }
 
+/**
+ * @brief Calculate Euler angles from a direction cosine matrix
+ * 
+ * @param CbtM Direction cosine matrix from body to navigation frame
+ * @param pitch Pitch angle (degrees) (output)
+ * @param roll Roll angle (degrees) (output)
+ * @param yaw Yaw angle (degrees) (output)
+ */
+inline void calculateEulerAngles(const Eigen::Matrix3d& CbtM,
+                                         double& pitch,
+                                         double& roll,
+                                         double& yaw) {
+    // Compute pitch angle (arcsin of element at row 1, column 2)
+    pitch = asin(CbtM(1,2)) * 180.0 / M_PI;
+    
+    // Compute roll angle (using elements at row 0, column 2 and row 2, column 2)
+    const double eps = 2e-16;  // Small value to avoid division by zero
+    if (abs(CbtM(2,2)) < eps) {
+        if (CbtM(0,2) > 0) {
+            roll = -90.0;
+        } else {
+            roll = 90.0;
+        }
+    } else {
+        roll = atan(-CbtM(0,2)/CbtM(2,2)) * 180.0 / M_PI;
+        // Adjust roll angle based on quadrants
+        if (CbtM(2,2) < 0) {
+            if (CbtM(0,2) > 0) {
+                roll = roll - 180.0;
+            } else {
+                roll = roll + 180.0;
+            }
+        }
+    }
+    
+    // Compute yaw angle (using elements at row 1, column 0 and row 1, column 1)
+    if (abs(CbtM(1,1)) > eps) {
+        yaw = atan(-CbtM(1,0)/CbtM(1,1)) * 180.0 / M_PI;
+        // Adjust yaw angle to [0, 360) degrees
+        if (CbtM(1,1) > 0) {
+            if (yaw < 0) {
+                yaw += 360.0;
+            }
+        } else {
+            yaw += 180.0;
+        }
+    } else {
+        if (CbtM(1,0) < 0) {
+            yaw = 90.0;
+        } else {
+            yaw = 270.0;
+        }
+    }
+}
+
 } // namespace NavigationUtils

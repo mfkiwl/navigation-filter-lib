@@ -33,6 +33,7 @@ find_package(Eigen3 3.3 REQUIRED)    # Required for matrix and vector operations
 # Set project include directories
 include_directories(
     include         # Main include directory for project headers
+    include/params  # Navigation parameters headers
     ${EIGEN3_INCLUDE_DIR}  # Eigen include directory
 )
 
@@ -55,16 +56,24 @@ target_include_directories(SystemInitializer
     PUBLIC 
     include
     include/initializers
+    include/params
 )
 
-# NavigationCore library (core navigation algorithms and Kalman filtering)
-add_library(NavigationCore src/NavigationCore.cpp)
-target_link_libraries(NavigationCore 
+# NavigationAlgorithms library (core navigation algorithms and Kalman filtering)
+add_library(NavigationAlgorithms 
+    src/core/KfNavigation.cpp  # 更新为新的导航核心实现
+)
+target_link_libraries(NavigationAlgorithms 
     MathUtils 
     DataLoader 
     SystemInitializer
 )
-target_include_directories(NavigationCore PUBLIC include)
+target_include_directories(NavigationAlgorithms 
+    PUBLIC 
+    include
+    include/core
+    include/params
+)
 
 # SaveResults library (handles saving of navigation results)
 add_library(SaveResults src/SaveResults.cpp)
@@ -76,7 +85,7 @@ add_executable(main_app src/main.cpp)
 target_link_libraries(main_app 
     DataLoader 
     SystemInitializer 
-    NavigationCore 
+    NavigationAlgorithms  # 使用新的导航算法库
     SaveResults
 )
 # Set output directory for the executable
@@ -92,4 +101,10 @@ message(STATUS "  Build Type: ${CMAKE_BUILD_TYPE}")
 message(STATUS "  Install Prefix: ${CMAKE_INSTALL_PREFIX}")
 message(STATUS "  Executable Output: ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
 message(STATUS "  Library Output: ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}")
+message(STATUS "  Libraries: ")
+message(STATUS "    - MathUtils")
+message(STATUS "    - DataLoader")
+message(STATUS "    - SystemInitializer")
+message(STATUS "    - NavigationAlgorithms (KF based)")
+message(STATUS "    - SaveResults")
 message(STATUS "=============================================")
