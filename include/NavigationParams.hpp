@@ -12,6 +12,7 @@
 #include <memory>
 #include "params/NavParamsBase.hpp"
 #include "params/KfParams.hpp"
+#include "params/EkfParams.hpp"  // 添加EKF参数头文件
 
 /**
  * @brief Filter type enumeration
@@ -42,8 +43,13 @@ inline std::unique_ptr<NavParamsBase> create_nav_params(
             params->gps_rate = GPSrate;
             return params;
         }
-        // 预留其他滤波器类型的创建逻辑
-        case FilterType::EKF:
+        case FilterType::EKF: {
+            auto params = std::make_unique<EkfParams>();
+            params->imu_rate = IMUrate;
+            params->gps_rate = GPSrate;
+            
+            return params;
+        }
         case FilterType::UKF:
         default:
             throw std::runtime_error("Unsupported filter type");

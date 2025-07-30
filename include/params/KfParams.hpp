@@ -35,7 +35,6 @@ struct KalmanFilterParams {
     Eigen::MatrixXd Xsave;             ///< Saved state estimates
     Eigen::MatrixXd P_mean_square;     ///< Mean square covariance
     
-    // +++ 添加缺失的成员 +++
     Eigen::MatrixXd A;       ///< State transition matrix
     Eigen::MatrixXd H;       ///< Measurement matrix
     Eigen::VectorXd X_pred;  ///< Predicted state vector
