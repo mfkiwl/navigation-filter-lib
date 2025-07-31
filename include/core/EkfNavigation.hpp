@@ -68,7 +68,7 @@ private:
     void computeJacobianMatrix(int i);
     void discretizeSystem(double dt);
     void runEkfPrediction(int i);
-    void runEkfUpdate(int i, const Eigen::VectorXd& Z);
+    void runEkfUpdate(int i, const Eigen::VectorXd& Z, const Eigen::MatrixXd& H);
     
     // Algorithm implementations
     void strapdownAttitudeUpdate(const Eigen::Vector3d& wtb_b,
@@ -125,4 +125,6 @@ private:
     Eigen::MatrixXd parm_old_;
     Eigen::MatrixXd parm_mid_;
     Eigen::MatrixXd parm_new_;
+
+    Eigen::MatrixXd G_mid_;
 };

@@ -22,6 +22,11 @@ public:
     
     void initialize_state(NavigationState& state, 
                          int totalPoints) override;
+
+    void initialize_kalman(KalmanFilterParams& kalman, 
+                          int totalPoints) override {
+        // 空实现
+    }
     
     /**
      * @brief Initialize EKF-specific parameters

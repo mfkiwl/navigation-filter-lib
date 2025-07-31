@@ -1,6 +1,6 @@
 # data
-data/*.dat
-output/*.dat
+data/
+!data/readme.md
 
 # 忽略构建目录
 build/

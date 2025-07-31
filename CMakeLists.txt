@@ -50,6 +50,7 @@ target_include_directories(DataLoader PUBLIC include)
 # SystemInitializer library (initializes navigation parameters and state)
 add_library(SystemInitializer 
     src/initializers/KfInitializer.cpp
+    src/initializers/EkfInitializer.cpp  # 添加EKF初始化器
 )
 target_link_libraries(SystemInitializer MathUtils DataLoader)
 target_include_directories(SystemInitializer 
@@ -59,9 +60,10 @@ target_include_directories(SystemInitializer
     include/params
 )
 
-# NavigationAlgorithms library (core navigation algorithms and Kalman filtering)
+# NavigationAlgorithms library (core navigation algorithms and filtering)
 add_library(NavigationAlgorithms 
-    src/core/KfNavigation.cpp  # 更新为新的导航核心实现
+    src/core/KfNavigation.cpp
+    src/core/EkfNavigation.cpp  # 添加EKF导航算法
 )
 target_link_libraries(NavigationAlgorithms 
     MathUtils 
@@ -80,16 +82,31 @@ add_library(SaveResults src/SaveResults.cpp)
 target_link_libraries(SaveResults MathUtils)
 target_include_directories(SaveResults PUBLIC include)
 
-# Main application executable
-add_executable(main_app src/main.cpp)
-target_link_libraries(main_app 
+# KF主应用程序
+add_executable(IntegratedNavigationKF 
+    src/main_kf.cpp  # KF主程序
+)
+target_link_libraries(IntegratedNavigationKF 
     DataLoader 
     SystemInitializer 
-    NavigationAlgorithms  # 使用新的导航算法库
+    NavigationAlgorithms 
     SaveResults
 )
-# Set output directory for the executable
-set_target_properties(main_app PROPERTIES
+set_target_properties(IntegratedNavigationKF PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+)
+
+# EKF主应用程序
+add_executable(IntegratedNavigationEKF 
+    src/main_ekf.cpp  # EKF主程序
+)
+target_link_libraries(IntegratedNavigationEKF 
+    DataLoader 
+    SystemInitializer 
+    NavigationAlgorithms 
+    SaveResults
+)
+set_target_properties(IntegratedNavigationEKF PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
 )
 
@@ -105,6 +122,9 @@ message(STATUS "  Libraries: ")
 message(STATUS "    - MathUtils")
 message(STATUS "    - DataLoader")
 message(STATUS "    - SystemInitializer")
-message(STATUS "    - NavigationAlgorithms (KF based)")
+message(STATUS "    - NavigationAlgorithms (KF and EKF)")
 message(STATUS "    - SaveResults")
+message(STATUS "  Executables: ")
+message(STATUS "    - IntegratedNavigationKF")
+message(STATUS "    - IntegratedNavigationEKF")
 message(STATUS "=============================================")

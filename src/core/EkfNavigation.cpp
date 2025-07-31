@@ -89,6 +89,13 @@ void EkfNavigation::updateStrapdown(const IMUData& imu, int i) {
                      state_.Velocity[i+1](0), state_.Velocity[i+1](1), state_.Velocity[i+1](2),
                      last_f_INSt_.transpose(),
                      state_.CbtM;
+        
+        parm_mid_ = parm_old_;
+        parm_new_ = parm_old_;
+
+        G_mid_ = MatrixXd::Zero(15, 6);
+        G_mid_.block<3,3>(0,0) = state_.CtbM;
+        G_mid_.block<3,3>(3,3) = state_.CtbM;
     }
     else if (i % 50 == 0 && i % 100 != 0) {
         parm_mid_ = MatrixXd(6, 3);
@@ -96,6 +103,11 @@ void EkfNavigation::updateStrapdown(const IMUData& imu, int i) {
                      state_.Velocity[i+1](0), state_.Velocity[i+1](1), state_.Velocity[i+1](2),
                      last_f_INSt_.transpose(),
                      state_.CbtM;
+
+        // 同步计算G_mid
+        G_mid_ = MatrixXd::Zero(15, 6);
+        G_mid_.block<3,3>(0,0) = state_.CtbM;
+        G_mid_.block<3,3>(3,3) = state_.CtbM;
     }
     
     // Store new parameters at the end of the interval
@@ -179,7 +191,7 @@ void EkfNavigation::computeJacobianMatrix(int i) {
             state_.CbtM;
     
     // Compute Jacobian
-    ekf_.A = computeJacobian(ekf_.X.col(ekf_.N_kalman-1), parm);
+    ekf_.A = computeJacobian(ekf_.X.col(ekf_.N_kalman-1), parm_mid_);
 }
 
 void EkfNavigation::discretizeSystem(double dt) {
@@ -189,7 +201,7 @@ void EkfNavigation::discretizeSystem(double dt) {
     G.block<3,3>(3,3) = state_.CtbM;  // Accel bias to velocity error
     
     // Discretize the system
-    ltiDiscretize(ekf_.A, G, ekf_.Q, dt, ekf_.disA, ekf_.disQ);
+    ltiDiscretize(ekf_.A, G_mid_, ekf_.Q, dt, ekf_.disA, ekf_.disQ);
 }
 
 void EkfNavigation::runEkfPrediction(int i) {
@@ -228,16 +240,11 @@ void EkfNavigation::updateMeasurement(const GPSData& gps, int i) {
                                        current_Rx_, current_Ry_);
     
     // Run EKF update
-    runEkfUpdate(i, Z);
+    runEkfUpdate(i, Z, H);
 }
 
-void EkfNavigation::runEkfUpdate(int i, const Eigen::VectorXd& Z) {
+void EkfNavigation::runEkfUpdate(int i, const Eigen::VectorXd& Z, const Eigen::MatrixXd& H) {
     int k = ekf_.N_kalman;
-    
-    // Build measurement matrix
-    MatrixXd H = buildMeasurementMatrix(state_.Roll[i+1], state_.Pitch[i+1], state_.Yaw[i+1],
-                                       state_.Latitude[i+1], state_.Altitude[i+1], 
-                                       current_Rx_, current_Ry_);
     
     // Compute innovation covariance
     MatrixXd S = H * ekf_.P_pred * H.transpose() + ekf_.R;
@@ -323,6 +330,9 @@ void EkfNavigation::correctErrors(int i) {
     
     // Update quaternion
     state_.Quaternion = NavigationUtils::eulerToQuaternion(state_.Pitch[i+1], state_.Roll[i+1], state_.Yaw[i+1]);
+
+    // 更新参数为下一次预测做准备
+    parm_old_ = parm_new_;
 }
 
 // ================== Time Management ==================
@@ -541,6 +551,7 @@ Eigen::VectorXd EkfNavigation::rungeKutta4(const Eigen::VectorXd& X,
     return X + dt / 6.0 * (k1 + 2*k2 + 2*k3 + k4);
 }
 
+/*
 Eigen::MatrixXd EkfNavigation::computeJacobian(const Eigen::VectorXd& X,
                                               const Eigen::MatrixXd& parm) {
     // Numerical Jacobian computation
@@ -566,6 +577,183 @@ Eigen::MatrixXd EkfNavigation::computeJacobian(const Eigen::VectorXd& X,
     
     return jac;
 }
+*/
+Eigen::MatrixXd EkfNavigation::computeJacobian(const Eigen::VectorXd& X,
+                                              const Eigen::MatrixXd& parm) {
+    // 提取参数
+    double TGPS = parm(0,0);
+    double Lat = parm(0,1);
+    double Hei = parm(0,2);
+    double Vx = parm(1,0);
+    double Vy = parm(1,1);
+    double Vz = parm(1,2);
+    Vector3d fn(parm(2,0), parm(2,1), parm(2,2));
+    Matrix3d Cnb = parm.block<3,3>(3,0);
+
+    // 地球参数
+    const double WIEE = 7.2921151467e-5;
+    const double Re = 6378135.072;
+    const double e = 1.0/298.25;
+    
+    // 计算曲率半径
+    double sinLat = sin(Lat);
+    double sin2Lat = sinLat * sinLat;
+    double Rmh = Re * (1 - 2 * e + 3 * e * sin2Lat) + Hei;
+    double Rnh = Re * (1 + e * sin2Lat) + Hei;
+    
+    // 提取状态变量
+    double Atheta = X(0);  // 俯仰角误差
+    double Agama = X(1);   // 横滚角误差
+    double Afai = X(2);    // 航向角误差
+    
+    // ========== 线性部分 ==========
+    MatrixXd FN = MatrixXd::Zero(9, 9);
+    
+    // FN(1,2) 部分
+    FN(0,4) = -1.0 / Rmh;
+    FN(1,3) = 1.0 / Rnh;
+    FN(2,3) = 1.0 / Rnh * tan(Lat);
+    
+    // FN(1,3) 部分
+    FN(1,6) = -WIEE * sinLat;
+    FN(2,6) = WIEE * cos(Lat) + Vx / Rnh / pow(cos(Lat), 2);
+    FN(0,8) = Vy / pow(Rmh, 2);
+    FN(1,8) = -Vx / pow(Rnh, 2);
+    FN(2,8) = -Vx * tan(Lat) / pow(Rnh, 2);
+    
+    // FN(2,2) 部分
+    FN(3,3) = 1.0 / Rnh * (Vy * tan(Lat) - Vz);
+    FN(3,4) = 2.0 * WIEE * sinLat + Vx / Rnh * tan(Lat);
+    FN(3,5) = -2.0 * WIEE * cos(Lat) - Vx / Rnh;
+    FN(4,3) = -2.0 * WIEE * sinLat - 2.0 * Vx / Rnh * tan(Lat);
+    FN(4,4) = -Vz / Rmh;
+    FN(4,5) = -Vy / Rmh;
+    FN(5,3) = 2.0 * WIEE * cos(Lat) + 2.0 * Vx / Rnh;
+    FN(5,4) = 2.0 * Vy / Rmh;
+    
+    // FN(2,3) 部分
+    FN(3,6) = 2.0 * WIEE * cos(Lat) * Vy + 2.0 * WIEE * sinLat * Vz + 
+               Vx * Vy / Rnh / pow(cos(Lat), 2);
+    FN(4,6) = -Vx * (2.0 * WIEE * cos(Lat) + Vx / Rnh / pow(cos(Lat), 2));
+    FN(5,6) = -2.0 * WIEE * sinLat * Vx;
+    FN(3,8) = (Vx * Vz - Vx * Vy * tan(Lat)) / pow(Rnh, 2);
+    FN(4,8) = (Vy * Vz + pow(Vx, 2) * tan(Lat)) / pow(Rnh, 2);
+    FN(5,8) = -(pow(Vx, 2) + pow(Vy, 2)) / pow(Rnh, 2);
+    
+    // FN(3,2) 部分
+    FN(6,4) = 1.0 / Rmh;
+    FN(7,3) = 1.0 / (Rnh * cos(Lat));
+    
+    // FN(3,3) 部分
+    FN(7,6) = tan(Lat) / (Rnh * cos(Lat)) * Vx;
+    FN(6,8) = -Vy / pow(Rmh, 2);
+    FN(7,8) = -Vx / (pow(Rnh, 2) * cos(Lat));
+    FN(8,5) = 1;
+    
+    // 构建FS矩阵
+    MatrixXd FS(9, 6);
+    FS << Cnb.transpose(), MatrixXd::Zero(3, 3),
+          MatrixXd::Zero(3, 3), Cnb.transpose(),
+          MatrixXd::Zero(3, 3), MatrixXd::Zero(3, 3);
+    
+    // 构建完整的线性部分矩阵 F_linear (15x15)
+    MatrixXd F_linear = MatrixXd::Zero(15, 15);
+    F_linear.block<9, 9>(0, 0) = FN;
+    F_linear.block<9, 6>(0, 9) = FS;
+    
+    // ========== 非线性部分 ==========
+    MatrixXd Ajac = MatrixXd::Zero(15, 15);
+    
+    // 计算Wien, Wenn, Winn向量
+    Vector3d Wien(0, WIEE * cos(Lat), WIEE * sin(Lat));
+    Vector3d Wenn(-Vy / Rmh, Vx / Rnh, Vx * tan(Lat) / Rnh);
+    Vector3d Winn = Wien + Wenn;
+    
+    // 计算姿态矩阵 Cnp
+    double cAtheta = cos(Atheta);
+    double sAtheta = sin(Atheta);
+    double cAgama = cos(Agama);
+    double sAgama = sin(Agama);
+    double cAfai = cos(Afai);
+    double sAfai = sin(Afai);
+    
+    Matrix3d Cnp;
+    Cnp << cAgama*cAfai - sAgama*sAtheta*sAfai, 
+           cAgama*sAfai + sAgama*sAtheta*cAfai,
+           -sAgama*cAtheta,
+           -cAtheta*sAfai,
+           cAtheta*cAfai,
+           sAtheta,
+           sAgama*cAfai + cAgama*sAtheta*sAfai,
+           sAgama*sAfai - cAgama*sAtheta*cAfai,
+           cAgama*cAtheta;
+    
+    // 计算Ajac矩阵 (姿态部分)
+    // Ajac(1:3,1:3) 部分
+    Vector3d row1(-sAgama*cAtheta*sAfai, sAgama*cAtheta*cAfai, -sAgama*sAtheta);
+    Vector3d row2(sAgama*cAfai - cAgama*sAtheta*sAfai, 
+                 sAgama*sAfai + cAgama*sAtheta*cAfai,
+                 -cAgama*cAtheta);
+    Vector3d row3(cAgama*sAfai - sAgama*sAtheta*cAfai,
+                 cAgama*cAfai + sAgama*sAtheta*sAfai,
+                 0);
+    
+    Ajac(0,0) = row1.dot(Winn);
+    Ajac(0,1) = row2.dot(Winn);
+    Ajac(0,2) = row3.dot(Winn);
+    
+    Vector3d row4(-sAtheta*sAfai, sAtheta*cAfai, cAtheta);
+    Vector3d row5(0, 0, 0);
+    Vector3d row6(-cAtheta*cAfai, cAtheta*sAfai, 0);
+    
+    Ajac(1,0) = row4.dot(Winn);
+    Ajac(1,1) = row5.dot(Winn);
+    Ajac(1,2) = row6.dot(Winn);
+    
+    Vector3d row7(cAgama*cAtheta*sAfai, -cAgama*cAtheta*cAfai, cAgama*sAtheta);
+    Vector3d row8(cAgama*cAfai + sAgama*sAtheta*sAfai,
+                 cAgama*sAfai - sAgama*sAtheta*cAfai,
+                 sAgama*cAtheta);
+    Vector3d row9(sAgama*sAfai + cAgama*sAtheta*cAfai,
+                 sAgama*cAfai - cAgama*sAtheta*sAfai,
+                 0);
+    
+    Ajac(2,0) = row7.dot(Winn);
+    Ajac(2,1) = row8.dot(Winn);
+    Ajac(2,2) = row9.dot(Winn);
+    
+    // Ajac(4:6,1:3) 部分 (比力相关)
+    Vector3d col1(-sAgama*cAtheta*sAfai, -sAtheta*sAfai, cAgama*cAtheta*sAfai);
+    Vector3d col2(sAgama*cAfai - cAgama*sAtheta*sAfai, 0, cAgama*cAfai + sAgama*sAtheta*sAfai);
+    Vector3d col3(cAgama*sAfai - sAgama*sAtheta*cAfai, -cAtheta*cAfai, sAgama*sAfai + cAgama*sAtheta*cAfai);
+    
+    Ajac(3,0) = col1.dot(fn);
+    Ajac(3,1) = col2.dot(fn);
+    Ajac(3,2) = col3.dot(fn);
+    
+    Vector3d col4(sAgama*cAtheta*cAfai, sAtheta*cAfai, -cAgama*cAtheta*cAfai);
+    Vector3d col5(sAgama*sAfai + cAgama*sAtheta*cAfai, 0, cAgama*sAfai - sAgama*sAtheta*cAfai);
+    Vector3d col6(cAgama*cAfai + sAgama*sAtheta*sAfai, cAtheta*sAfai, sAgama*cAfai - cAgama*sAtheta*sAfai);
+    
+    Ajac(4,0) = col4.dot(fn);
+    Ajac(4,1) = col5.dot(fn);
+    Ajac(4,2) = col6.dot(fn);
+    
+    Vector3d col7(-sAgama*sAtheta, cAtheta, cAgama*sAtheta);
+    Vector3d col8(-cAgama*cAtheta, 0, sAgama*cAtheta);
+    Vector3d col9(0, 0, 0);
+    
+    Ajac(5,0) = col7.dot(fn);
+    Ajac(5,1) = col8.dot(fn);
+    Ajac(5,2) = col9.dot(fn);
+    
+    // ========== 合并结果 ==========
+    // Ajac = -Ajac + F_linear
+    MatrixXd result = -Ajac + F_linear;
+    
+    return result;
+}
+
 
 void EkfNavigation::ltiDiscretize(const Eigen::MatrixXd& F, 
                                  const Eigen::MatrixXd& G, 
@@ -584,13 +772,12 @@ void EkfNavigation::ltiDiscretize(const Eigen::MatrixXd& F,
     Phi.block(0,n,n,n) = G * Qc * G.transpose();
     Phi.block(n,n,n,n) = -F.transpose();
     
-    MatrixXd AB = (Phi * dt).exp() * MatrixXd::Zero(2*n, n);
-    AB.block(n,0,n,n) = I;
-    
-    MatrixXd AB2 = AB.block(0,0,n,n);
-    MatrixXd AB1 = AB.block(n,0,n,n);
-    
-    Q = AB2 * AB1.inverse();
+    MatrixXd G0(2*n, n);
+    G0 << MatrixXd::Zero(n, n), MatrixXd::Identity(n, n);
+
+    MatrixXd AB = (Phi * dt).exp() * G0;
+
+    Q = AB.block(0,0,n,n) * AB.block(n,0,n,n).inverse();
 }
 
 Eigen::MatrixXd EkfNavigation::buildMeasurementMatrix(double roll, double pitch, double yaw,
