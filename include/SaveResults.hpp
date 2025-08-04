@@ -6,8 +6,8 @@
  *
  * @author peanut-nav
  * @date Created: 2025-07-22
- * @last Modified: 2025-07-22
- * @version 0.1
+ * @last Modified: 2025-08-04
+ * @version 0.3.0
  */
 
 #pragma once
@@ -15,6 +15,7 @@
 #include "DataLoader.hpp"
 #include <fstream>
 #include <iomanip>
+#include <string>
 
 /**
  * @brief Navigation results saving class
@@ -28,6 +29,9 @@ public:
      * 
      * @param state Navigation state containing the results
      * @param imu IMU data used for indexing
+     * @param prefix Optional prefix for filename (default: "KF")
      */
-    static void saveNavigationResults(const NavigationState& state, const IMUData& imu);
+    static void saveNavigationResults(const NavigationState& state, 
+                                     const IMUData& imu,
+                                     const std::string& prefix = "KF");
 };

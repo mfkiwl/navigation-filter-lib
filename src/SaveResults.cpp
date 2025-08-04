@@ -4,23 +4,28 @@
  *
  * @author peanut-nav
  * @date Created: 2025-07-22
- * @last Modified: 2025-07-22
- * @version 0.1
+ * @last Modified: 2025-08-04
+ * @version 0.3.0
  */
 
 #include "SaveResults.hpp"
 #include <iostream>
+#include <string>
 
 /**
  * @brief Save navigation results to an output file
  * 
  * Writes navigation results to a formatted text file for analysis.
  */
-void SaveResults::saveNavigationResults(const NavigationState& state, const IMUData& imu) {
+void SaveResults::saveNavigationResults(const NavigationState& state, 
+                                       const IMUData& imu,
+                                       const std::string& prefix) {
+    std::string filename = "../output/" + prefix + "_navoutQ.dat";
+    
     // Open output file
-    std::ofstream outFile("../output/KF_navoutQ.dat");
+    std::ofstream outFile(filename);
     if (!outFile) {
-        std::cerr << "Error: Unable to open output file: KF_navoutQ.dat" << std::endl;
+        std::cerr << "Error: Unable to open output file: " << filename << std::endl;
         return;
     }
     
@@ -43,5 +48,5 @@ void SaveResults::saveNavigationResults(const NavigationState& state, const IMUD
     
     // Close file and notify user
     outFile.close();
-    std::cout << "Navigation results saved to KF_navoutQ.dat" << std::endl;
+    std::cout << "Navigation results saved to " << filename << std::endl;
 }

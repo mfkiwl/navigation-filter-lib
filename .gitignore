@@ -1,15 +1,13 @@
-# data
-data/*.dat
+data/
+!data/readme.md
+
 output/*.dat
 
-# 忽略构建目录
 build/
 build*/
 
-# 忽略IDE配置文件
 .vscode/
 
-# 忽略编译生成的文件
 *.o
 *.a
 *.so
@@ -17,7 +15,6 @@ build*/
 *.out
 *.exe
 
-# 忽略CMake生成的文件
 CMakeCache.txt
 CMakeFiles/
 cmake_install.cmake
@@ -29,15 +26,12 @@ install_manifest.txt
 .ninja_log
 compile_commands.json
 
-# 忽略可执行文件和库文件
 bin/
 lib/
 
-# 忽略系统文件
 .DS_Store
 Thumbs.db
 
-# 忽略IDE项目文件
 *.sln
 *.vcxproj
 *.vcxproj.filters
@@ -46,15 +40,12 @@ Thumbs.db
 *.user
 *.opendb
 
-# 忽略临时文件
 *~
 *.swp
 *.bak
 *.tmp
 
-# 忽略日志文件
 *.log
 
-# 忽略数据目录中的临时/处理文件
 data/*.tmp
 data/*.processed

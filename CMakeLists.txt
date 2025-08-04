@@ -4,8 +4,8 @@
 # including core math utilities, data loading, and navigation algorithms.
 #
 # @author peanut-nav
-# @date Created: 2025-07-22
-# @version 0.1
+# @date Created: 2025-08-04
+# @version 0.3.0
 
 # Minimum required CMake version
 cmake_minimum_required(VERSION 3.15)
@@ -33,6 +33,7 @@ find_package(Eigen3 3.3 REQUIRED)    # Required for matrix and vector operations
 # Set project include directories
 include_directories(
     include         # Main include directory for project headers
+    include/params  # Navigation parameters headers
     ${EIGEN3_INCLUDE_DIR}  # Eigen include directory
 )
 
@@ -47,41 +48,68 @@ target_link_libraries(DataLoader MathUtils)
 target_include_directories(DataLoader PUBLIC include)
 
 # SystemInitializer library (initializes navigation parameters and state)
-add_library(SystemInitializer src/SystemInitializer.cpp)
+add_library(SystemInitializer 
+    src/initializers/KfInitializer.cpp
+    src/initializers/EkfInitializer.cpp
+)
 target_link_libraries(SystemInitializer MathUtils DataLoader)
-target_include_directories(SystemInitializer PUBLIC include)
+target_include_directories(SystemInitializer 
+    PUBLIC 
+    include
+    include/initializers
+    include/params
+)
 
-# NavigationCore library (core navigation algorithms and Kalman filtering)
-add_library(NavigationCore src/NavigationCore.cpp)
-target_link_libraries(NavigationCore MathUtils DataLoader SystemInitializer)
-target_include_directories(NavigationCore PUBLIC include)
+# NavigationAlgorithms library (core navigation algorithms and filtering)
+add_library(NavigationAlgorithms 
+    src/core/KfNavigation.cpp
+    src/core/EkfNavigation.cpp
+    src/core/RtsSmoother.cpp
+)
+target_link_libraries(NavigationAlgorithms 
+    MathUtils 
+    DataLoader 
+    SystemInitializer
+)
+target_include_directories(NavigationAlgorithms 
+    PUBLIC 
+    include
+    include/core
+    include/params
+)
 
 # SaveResults library (handles saving of navigation results)
 add_library(SaveResults src/SaveResults.cpp)
 target_link_libraries(SaveResults MathUtils)
 target_include_directories(SaveResults PUBLIC include)
 
-# Main application executable
-add_executable(main_app src/main.cpp)
-target_link_libraries(main_app 
+# KF
+add_executable(IntegratedNavigationKF 
+    src/main_kf.cpp
+)
+target_link_libraries(IntegratedNavigationKF 
     DataLoader 
     SystemInitializer 
-    NavigationCore 
+    NavigationAlgorithms 
     SaveResults
 )
-# Set output directory for the executable
-set_target_properties(main_app PROPERTIES
+set_target_properties(IntegratedNavigationKF PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
 )
 
-# Optional installation configuration
-# install(TARGETS main_app
-#     RUNTIME DESTINATION bin
-# )
-# 
-# install(DIRECTORY include/ DESTINATION include
-#     FILES_MATCHING PATTERN "*.hpp"
-# )
+# EKF
+add_executable(IntegratedNavigationEKF 
+    src/main_ekf.cpp
+)
+target_link_libraries(IntegratedNavigationEKF 
+    DataLoader 
+    SystemInitializer 
+    NavigationAlgorithms 
+    SaveResults
+)
+set_target_properties(IntegratedNavigationEKF PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+)
 
 # Print configuration summary
 message(STATUS "=============================================")
@@ -91,4 +119,13 @@ message(STATUS "  Build Type: ${CMAKE_BUILD_TYPE}")
 message(STATUS "  Install Prefix: ${CMAKE_INSTALL_PREFIX}")
 message(STATUS "  Executable Output: ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
 message(STATUS "  Library Output: ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}")
+message(STATUS "  Libraries: ")
+message(STATUS "    - MathUtils")
+message(STATUS "    - DataLoader")
+message(STATUS "    - SystemInitializer")
+message(STATUS "    - NavigationAlgorithms (KF and EKF)")
+message(STATUS "    - SaveResults")
+message(STATUS "  Executables: ")
+message(STATUS "    - IntegratedNavigationKF")
+message(STATUS "    - IntegratedNavigationEKF")
 message(STATUS "=============================================")
