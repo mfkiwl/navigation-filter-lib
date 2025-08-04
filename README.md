@@ -1,176 +1,165 @@
 # Navigation Filter Library
 
-A modular C++17 framework for Inertial Navigation System (INS) + GNSS loosely‑coupled integration, featuring a 15‑state error‑state Kalman filter, deterministic simulation data, and visualisation tools.
+*A modular C++ framework for strap‑down INS + GNSS loosely‑coupled integration, now featuring both linear **Kalman Filter (KF)**, **Extended Kalman Filter (EKF)** and optional **Rauch‑Tung‑Striebel (RTS) smoother**.*
 
 ---
 
-## Features
+## ✨ Highlights
 
-| Category            | Highlights                                                                                                 |
-| ------------------- | ---------------------------------------------------------------------------------------------------------- |
-| **Algorithms**      | Strapdown mechanisation · 15‑state error‑state Kalman filter · Somigliana gravity with altitude correction |
-| **Modularity**      | Individual libraries: `MathUtils`, `DataLoader`, `SystemInitializer`, `NavigationCore`, `SaveResults`      |
-| **Reproducibility** | Synthetic dataset with fixed‑seed sensor‑noise injection                                                   |
-| **Tooling**         | CMake ≥ 3.15 build · Eigen‑only dependency · Python visualiser (`scripts/nav_visualizer.py`)                 |
-
----
-
-## Simulation Data Precision
-
-> The synthetic dataset emulates a navigation‑grade IMU + GPS. Key 1σ error characteristics (from **data/README.md**) are summarised below. These values are hard‑coded in the C++ noise models and reproduced in every run.
-
-* **GPS horizontal position**: ±3 m
-* **GPS vertical position**: ±3 m
-* **GPS velocity**: ±0.01 m/s per axis
-* **Gyroscope bias / white‑noise**: 0.01 deg/h each
-* **Accelerometer bias / white‑noise**: 50 µg each
-
-All random seeds are fixed, guaranteeing run‑to‑run repeatability.
+| Category            | Details                                                                                                                         |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| **Algorithms**      | Strap‑down mechanisation · 15‑state linear KF · 15‑state EKF · RTS smoothing · Somigliana gravity model                         |
+| **Modularity**      | Header‑only math helpers · pluggable **Initializers** · interchangeable KF/EKF **Navigation cores** · optional RTS **Smoother** |
+| **Tooling**         | CMake ≥ 3.15 · Single dependency: Eigen3 · Python 3 visualiser (`scripts/nav_visualizer.py`)                                    |
+| **Reproducibility** | Synthetic IMU + GPS dataset with fixed seeds ✔️                                                                                 |
 
 ---
 
-## Repository Layout
+## 📂 Repository Layout
 
 ```text
 .
-├── CMakeLists.txt          # Top‑level build script
-├── include/                # Public headers (*.hpp)
-├── src/                    # Library & app sources (*.cpp)
-├── data/                   # Synthetic sensor + ground‑truth dataset
-├── output/                 # Generated results (created at runtime)
-├── scripts/
-│   └── nav_visualizer.py   # Result visualisation utility
-├── tests/                  # Legacy Google Test suites (deprecated)
-└── README.md               # You are here
+├── CMakeLists.txt         # Top‑level build script
+├── include/               # Public C++ headers
+│   ├── core/              # NavigationCore + RTS smoother APIs
+│   ├── initializers/      # System initialisation helpers (KF & EKF)
+│   ├── params/            # Strong‑typed parameter structs
+│   └── MathUtils.hpp      # Common math utilities
+├── src/                   # Library & application sources
+│   ├── core/              # KF / EKF / RTS implementations
+│   ├── initializers/      # KF & EKF specific initialisers
+│   └── main_{kf,ekf}.cpp  # Demo executables
+├── data/                  # Deterministic sensor & ground‑truth data
+├── scripts/               # Plotting & analysis helpers
+│   └── nav_visualizer.py
+├── output/                # Auto‑generated results (created at run‑time)
+└── README.md              # You are here
 ```
 
 ---
 
-## Quick Start
+## 🚀 Quick Start
 
 ### 1 · Prerequisites
 
-| Software      | Version | Notes                              |
-| ------------- | ------- | ---------------------------------- |
-| CMake         | ≥ 3.15  | Build system generator             |
-| C++ Compiler  | C++17   | GCC ≥ 9 / Clang ≥ 11 / MSVC ≥ 19.3 |
-| Eigen         | ≥ 3.3   | Header‑only linear algebra         |
-| Python (opt.) | ≥ 3.8   | For visualisation only             |
-
-Install Eigen via your package manager, e.g.:
-
-```bash
-sudo apt install libeigen3-dev
-```
+| Software                | Version | Install hint                       |
+| ----------------------- | ------- | ---------------------------------- |
+| **CMake**               | ≥ 3.15  | `sudo apt install cmake`           |
+| **C++ Compiler**        | C++17   | GCC ≥ 9
+| **Eigen**               | ≥ 3.3   | `sudo apt install libeigen3-dev`   |
+| **Python** *(optional)* | ≥ 3.8   | For visualisation only             |
 
 ### 2 · Build
 
 ```bash
-# Clone & build
-mkdir build && cd build
+# Configure & build (out‑of‑source)
+mkdir -p build && cd build
 cmake ..
 make
 ```
 
-</details>
+### 3 · Run Simulations
 
-### 3 · Run Simulation
+Two demo executables are produced in **build/bin/**:
+
+| Executable                | Description                                    |
+| ------------------------- | ---------------------------------------------- |
+| `IntegratedNavigationKF`  | Classic 15‑state linear Kalman filter          |
+| `IntegratedNavigationEKF` | 15‑state Extended Kalman filter & RTS smoother |
+
+Example run (EKF + RTS):
 
 ```bash
 cd build/bin
-./main_app            # 600 s INS/GPS simulation
+./IntegratedNavigationEKF
 ```
 
-Outputs:
+Outputs are written to **output/**:
 
-* `output/KF_navoutQ.dat` – navigation solution
-* Console RMS error summary
+* `EKF_navoutQ.dat` / `KF_navoutQ.dat` – raw navigation solution
+* `smoothed_EKF_navoutQ.dat` / `smoothed_KF_navoutQ.dat` – RTS‑smoothed solution
+* `performance_statistics.txt` – RMS error summary
 
-### 4 · Generate & Save Visualisations (optional)
+### 4 · Visualise Results *(optional)*
 
 ```bash
-python3 scripts/nav_visualizer.py --save
+python3 scripts/nav_visualizer.py --save  # creates PNG figures in output/
 ```
+
+Generated artefacts include position/velocity time‑series, attitude plots, error curves and the reference trajectory.
 
 Seven artefacts are written to **output/** (six PNG figures + `performance_statistics.txt`).
 
 ---
 
-## Example Visualisations
+## 🧑‍🔬 Algorithm Overview
 
-Below are the figures produced by `nav_visualizer.py`.
+1. **Strap‑down Mechanisation** – propagates attitude, velocity & position in the navigation frame.
+2. **Kalman Filtering**
 
-### 1. Position & Velocity Measurements
+   * **KF**: linear error‑state model.
+   * **EKF**: non‑linear propagation using RK4, discretised Jacobians.
+3. **RTS Smoothing** – backward pass refines the whole trajectory using future information.
+4. **Sensor Models** – deterministic IMU noise injection replicates navigation‑grade sensors.
+5. **Gravity** – Somigliana model with altitude correction.
 
-<p align="center"><img src="output/position_velocity_results.png" alt="Position &amp; Velocity Measurements" width="700"></p>
+---
 
-### 2. Attitude Estimation Results
+## 📊 Example Visualisations
 
-<p align="center"><img src="output/attitude_estimation.png" alt="Attitude Estimation" width="500"></p>
+Below figures are created by `nav_visualizer.py` from the EKF run:
 
-### 3. Position Errors
+|                                                              |                                                          |
+| :----------------------------------------------------------: | :------------------------------------------------------: |
+| ![Position & Velocity](output/position_velocity_results.png) |        ![Attitude](output/attitude_estimation.png)       |
+|        ![Position Errors](output/position_errors.png)        |      ![Velocity Errors](output/velocity_errors.png)      |
+|        ![Attitude Errors](output/attitude_errors.png)        | ![Reference Trajectory](output/reference_trajectory.png) |
 
-<p align="center"><img src="output/position_errors.png" alt="Position Errors" width="500"></p>
+For full numerical metrics see **output/performance\_statistics.txt**.
 
-### 4. Velocity Errors
-
-<p align="center"><img src="output/velocity_errors.png" alt="Velocity Errors" width="500"></p>
-
-### 5. Attitude Errors
-
-<p align="center"><img src="output/attitude_errors.png" alt="Attitude Errors" width="500"></p>
-
-### 6. Reference Trajectory
-
-<p align="center"><img src="output/reference_trajectory.png" alt="Reference Trajectory" width="600"></p>
-
-### 📊 Performance Statistics
+### 📊 Performance Statistics (EKF + RTS smoother)
 
 | Metric                  | RMS Error     |
 |-------------------------|---------------|
-| Latitude Error          | 0.036382 m    |
-| Longitude Error         | 0.049501 m    |
-| Height Error            | 0.033429 m    |
-| Yaw Angle Error         | 0.011062 °    |
-| Pitch Angle Error       | 0.000453 °    |
-| Roll Angle Error        | 0.000631 °    |
-
-
----
-
-## Algorithm Overview
-
-1. **Strapdown Mechanisation** – attitude, velocity & position propagation (`NavigationCore.cpp`).
-2. **Kalman Filter** – 15 states (attitude, velocity, position, gyro & accel bias) updated at 20 Hz.
-3. **Sensor Models** – bias + white noise added to ideal IMU (`DataLoader::addIMUNoise`).
-4. **Gravity Model** – Somigliana formula with altitude term (`NavigationCore::calculateGravity`).
+| Latitude Error          | 0.012959 m    |
+| Longitude Error         | 0.019882 m    |
+| Height Error            | 0.006577 m    |
+| Yaw Angle Error         | 0.001972 °    |
+| Pitch Angle Error       | 0.000263 °    |
+| Roll Angle Error        | 0.000568 °    |
 
 ---
 
-## Dataset
+## 📁 Dataset
 
-Synthetic navigation data live in **data/** and are detailed in `data/README.md`.
+Synthetic sensor and ground‑truth files reside in **data/**. Key 1σ characteristics (hard‑coded):
+
+* **GPS**: ±3 m horizontal & vertical, ±0.01 m/s velocity
+* **Gyro bias**: 0.01 °/h per axis
+* **Accel bias**: 50 µg per axis
+
+All random seeds are fixed → every run is bit‑for‑bit repeatable.
 
 ---
 
-## Tests
+## 🛠️ Tests
 
-`tests/` holds historical Google Test suites maintained for reference only; they may not compile against the current API.
+Legacy Google Test suites live in **tests\_old/**. They are **deprecated** but kept for reference.
 
 ---
 
-## Roadmap
+## 🗺️ Roadmap
 
-* ✅ Base INS/GNSS KF (v0.1)
-* 🔜 Extended/Unscented Kalman Filter/...
-* 🔜 Multi‑sensor fusion (magnetometer, ...)
+* ✅ v0.3 – EKF core & RTS smoother
+* 🔜 UKF/DD2/...
+* 🔜 Multi‑sensor fusion (magnetometer, …)
 * 🔜 Real‑time ROS node
 
-Contributions & feature requests are welcome!
+PRs & feature requests welcome!
 
 ---
 
-## Contributing
+## 🤝 Contributing
 
 1. Fork → feature‑branch → PR.
 2. Follow the [Contributor Covenant](https://www.contributor-covenant.org/).
@@ -178,30 +167,30 @@ Contributions & feature requests are welcome!
 
 ---
 
-## License
+## ⚖️ License
 
-Released under the MIT License – see `LICENSE` for full text.
+MIT License – see `LICENSE` for full text.
 
 ---
 
-## Citation
+## 📚 Citation
 
 ```bibtex
 @software{peanut-nav_navigation_filter_2025,
   author  = {Peanut‑nav},
   title   = {Navigation Filter Library},
   year    = {2025},
-  version = {0.1.0},
+  version = {0.3.0},
   url     = {https://github.com/peanut-nav/navigation-filter-lib}
 }
 ```
 
 ---
 
-## Authors
+## ✏️ Authors
 
-* **peanut‑nav** – initial architect / maintainer
+* **peanut‑nav** – architect / maintainer
 
 ---
 
-> *Enjoy navigating!*
+> *Happy navigating!*

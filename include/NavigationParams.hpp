@@ -4,15 +4,15 @@
  *
  * @author peanut-nav
  * @date Created: 2025-07-22
- * @last Modified: 2025-07-22
- * @version 0.1
+ * @last Modified: 2025-08-04
+ * @version 0.3.0
  */
 
 #pragma once
 #include <memory>
 #include "params/NavParamsBase.hpp"
 #include "params/KfParams.hpp"
-#include "params/EkfParams.hpp"  // 添加EKF参数头文件
+#include "params/EkfParams.hpp"
 
 /**
  * @brief Filter type enumeration

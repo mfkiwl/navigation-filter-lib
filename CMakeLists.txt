@@ -4,8 +4,8 @@
 # including core math utilities, data loading, and navigation algorithms.
 #
 # @author peanut-nav
-# @date Created: 2025-07-22
-# @version 0.1
+# @date Created: 2025-08-04
+# @version 0.3.0
 
 # Minimum required CMake version
 cmake_minimum_required(VERSION 3.15)
@@ -83,9 +83,9 @@ add_library(SaveResults src/SaveResults.cpp)
 target_link_libraries(SaveResults MathUtils)
 target_include_directories(SaveResults PUBLIC include)
 
-# KF主应用程序
+# KF
 add_executable(IntegratedNavigationKF 
-    src/main_kf.cpp  # KF主程序
+    src/main_kf.cpp
 )
 target_link_libraries(IntegratedNavigationKF 
     DataLoader 
@@ -97,9 +97,9 @@ set_target_properties(IntegratedNavigationKF PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
 )
 
-# EKF主应用程序
+# EKF
 add_executable(IntegratedNavigationEKF 
-    src/main_ekf.cpp  # EKF主程序
+    src/main_ekf.cpp
 )
 target_link_libraries(IntegratedNavigationEKF 
     DataLoader 

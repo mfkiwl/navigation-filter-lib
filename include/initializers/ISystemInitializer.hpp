@@ -6,12 +6,12 @@
  *
  * @author peanut-nav
  * @date Created: 2025-07-22
- * @last Modified: 2025-07-22
- * @version 0.1
+ * @last Modified: 2025-08-04
+ * @version 0.3.0
  */
 
 #pragma once
-#include "../NavigationParams.hpp"  // 使用聚合头文件
+#include "../NavigationParams.hpp"
 
 /**
  * @brief System initializer interface

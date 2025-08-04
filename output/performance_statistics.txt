@@ -1,7 +1,7 @@
 ===== Performance Statistics =====
-Latitude RMS Error: 0.036382 m
-Longitude RMS Error: 0.049501 m
-Height RMS Error: 0.033429 m
-Yaw Angle RMS Error: 0.011062 °
-Pitch Angle RMS Error: 0.000453 °
-Roll Angle RMS Error: 0.000631 °
+Latitude RMS Error: 0.012959 m
+Longitude RMS Error: 0.019882 m
+Height RMS Error: 0.006577 m
+Yaw Angle RMS Error: 0.001972 °
+Pitch Angle RMS Error: 0.000263 °
+Roll Angle RMS Error: 0.000568 °

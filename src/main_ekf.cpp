@@ -4,12 +4,12 @@
  *
  * Implements the main workflow of the EKF-based integrated navigation system,
  * including data loading, system initialization, navigation processing,
- * results saving, and performance evaluation.
+ * RTS smoothing, results saving, and performance evaluation.
  *
  * @author peanut-nav
  * @date Created: 2025-07-22
- * @last Modified: 2025-07-22
- * @version 0.1
+ * @last Modified: 2025-08-04
+ * @version 0.3.0
  */
 
 #include "DataLoader.hpp"
@@ -23,49 +23,48 @@
 #include <iomanip>
 
 int main() {
-    // Initialize random number generator with fixed seed for reproducibility
+    // Initialize Mersenne Twister engine with fixed seed for reproducibility
     std::mt19937 rng(1);
     
     // System configuration parameters
-    const int IMUrate = 200;     ///< IMU sampling rate (Hz)
-    const int GPSrate = 1;      ///< GPS sampling rate (Hz)
-    const double simTime = 1400;  ///< Total simulation time (seconds)
-    const std::string dataDir = "../data";  ///< 数据目录
+    const int IMUrate = 200;     ///< IMU sampling frequency in Hz
+    const int GPSrate = 1;       ///< GPS measurement update rate in Hz
+    const double simTime = 1400; ///< Total simulation duration in seconds
+    const std::string dataDir = "../data";  ///< Directory containing input datasets
     
-    // Print system configuration
+    // Print system configuration parameters
     std::cout << "=== Integrated Navigation System Startup ===" << std::endl;
     std::cout << "System Configuration: " << std::endl;
     std::cout << "  IMU Rate: " << IMUrate << " Hz" << std::endl;
     std::cout << "  GPS Rate: " << GPSrate << " Hz" << std::endl;
     std::cout << "  Simulation Time: " << simTime << " seconds" << std::endl;
     
-    // Load navigation data
+    // Load navigation datasets from files
     std::cout << "\nLoading navigation data..." << std::endl;
-    IMUData imu;
-    GPSData gps;
-    TrajectoryData track;
+    IMUData imu;          ///< Container for IMU measurements
+    GPSData gps;          ///< Container for GPS measurements
+    TrajectoryData track; ///< Container for reference trajectory
     DataLoader::loadData(dataDir, IMUrate, simTime, imu, gps, track);
     std::cout << "Data loading completed: " << std::endl;
     std::cout << "  IMU points: " << imu.index.size() << std::endl;
     std::cout << "  GPS points: " << gps.time.size() << std::endl;
     std::cout << "  Trajectory points: " << track.time.size() << std::endl;
     
-    // Initialize navigation system
+    // Initialize EKF navigation system
     std::cout << "\nInitializing navigation system..." << std::endl;
-
-    // 创建EKF初始化器
+ 
+    // Create EKF initializer with system parameters
     EkfInitializer initializer(IMUrate, GPSrate, simTime);
     
-    // 创建参数对象 - 使用 EkfParams 类型
-    EkfParams params;             ///< 导航参数（包含地球参数和EKF参数）
-    NavigationState state;       ///< 导航状态
+    EkfParams params;       ///< Navigation system parameters (earth model + EKF)
+    NavigationState state; ///< Primary navigation state container
     
-    // 初始化参数、状态和EKF参数
+    // Calculate total navigation points and initialize parameters/state
     int totalPoints = simTime * IMUrate + 1;
     initializer.initialize_params(params, dataDir);
     initializer.initialize_state(state, totalPoints);
     initializer.initialize_ekf(params.ekf_params, totalPoints);
-
+ 
     std::cout << "System initialization completed" << std::endl;
     std::cout << "Initial State: " << std::endl;
     std::cout << "  Latitude: " << state.Latitude[0] << "°" << std::endl;
@@ -75,14 +74,14 @@ int main() {
     std::cout << "  Roll: " << state.Roll[0] << "°" << std::endl;
     std::cout << "  Yaw: " << state.Yaw[0] << "°" << std::endl;
     
-    // 打印地球参数
+    // Display Earth model parameters
     std::cout << "\nEarth Parameters:" << std::endl;
     std::cout << "  Re: " << params.earth_params.Re << " m" << std::endl;
     std::cout << "  e: " << params.earth_params.e << std::endl;
     std::cout << "  W_ie: " << params.earth_params.W_ie << " rad/s" << std::endl;
     std::cout << "  g0: " << params.earth_params.g0 << " m/s²" << std::endl;
     
-    // 打印KF参数
+    // Display EKF configuration parameters
     std::cout << "\nKalman Filter Parameters:" << std::endl;
     std::cout << "  N: " << params.ekf_params.N << std::endl;
     std::cout << "  M: " << params.ekf_params.M << std::endl;
@@ -90,41 +89,39 @@ int main() {
     std::cout << "  P matrix size: " << params.ekf_params.P.rows() 
               << "x" << params.ekf_params.P.cols() << std::endl;
     
-    // ================== EKF导航解算 ==================
-    // Run navigation algorithm
+    // ================== EKF NAVIGATION PROCESSING ==================
     std::cout << "\nRunning navigation algorithm..." << std::endl;
     
-    // 创建并初始化扩展卡尔曼滤波导航对象
+    // Initialize Extended Kalman Filter navigation processor
     EkfNavigation nav;
     nav.initialize(params, state);
     
-    // 执行导航解算
+    // Execute EKF-based navigation solution
     nav.run(imu, gps);
     
-    // 更新状态引用
+    // Update navigation state with filter results
     state = nav.getState();
-
+ 
     std::cout << "\nNavigation algorithm completed" << std::endl;
-    // ================== 导航解算部分更新结束 ==================
+    // ================== NAVIGATION PROCESSING COMPLETE ==================
     
-    // Save navigation results
+    // Persist EKF navigation results to storage
     std::cout << "\nSaving navigation results..." << std::endl;
-    // Save navigation results
    SaveResults::saveNavigationResults(state, imu, "EKF");
     
-    // Performance evaluation
+    // Calculate RMS errors against reference trajectory
     std::cout << "\n===== Performance Evaluation (Before Smoothing) =====" << std::endl;
-    int z_up = 220000;     ///< Start index for performance evaluation
+    int z_up = 220000;     ///< Start index for evaluation window
     int z_down = std::min(280000, static_cast<int>(track.time.size()));  ///< End index
     
     if (z_down > z_up) {
         double latErrSq = 0.0, lonErrSq = 0.0, altErrSq = 0.0;
         double yawErrSq = 0.0, pitchErrSq = 0.0, rollErrSq = 0.0;
-        const double Re = 6378135.072;  ///< Earth equatorial radius
+        const double Re = 6378135.072;  ///< Earth equatorial radius (WGS84)
         
-        // Calculate RMS errors for each navigation parameter
+        // Accumulate squared errors for each parameter
         for (int i = z_up; i < z_down; i++) {
-            // Position errors in meters
+            // Position errors converted to meters
             latErrSq += pow((state.Latitude[i] - track.lat[i]) * M_PI / 180.0 * Re, 2);
             lonErrSq += pow((state.Longitude[i] - track.lon[i]) * M_PI / 180.0 * Re, 2);
             altErrSq += pow(state.Altitude[i] - track.alt[i], 2);
@@ -135,7 +132,7 @@ int main() {
             rollErrSq += pow(state.Roll[i] - track.roll[i], 2);
         }
         
-        // Calculate and display RMS errors
+        // Calculate and display RMS metrics
         int n = z_down - z_up;
         std::cout << std::fixed << std::setprecision(6);
         std::cout << "=== EKF Performance Evaluation ===" << std::endl;
@@ -147,16 +144,16 @@ int main() {
         std::cout << "Roll RMS error: " << sqrt(rollErrSq / n) << " °" << std::endl;
     }
     
-    // ================== RTS 平滑处理 ==================
+    // ================== RTS SMOOTHING ==================
     std::cout << "\n===== Running RTS Smoothing =====" << std::endl;
     
-    // 获取 RTS 平滑器
+    // Retrieve RTS smoother instance from navigation processor
     RtsSmoother& rts_smoother = nav.getRtsSmoother();
     
-    // 执行 RTS 平滑
+    // Execute backward-pass smoothing algorithm
     RtsSmoother::SmoothResult smooth_result = rts_smoother.smooth(params.ekf_params.Q);
     
-    // 生成平滑后的导航结果
+    // Generate refined navigation solution using smoothing corrections
     NavigationState smoothed_state = rts_smoother.postProcessNavigation(
         imu,
         track,
@@ -167,21 +164,21 @@ int main() {
         params.imu_rate
     );
     
-    // 保存平滑后的结果
+    // Save smoothed EKF navigation solution
     std::cout << "\nSaving smoothed navigation results..." << std::endl;
     SaveResults::saveNavigationResults(smoothed_state, imu, "smoothed_EKF");
     
-    // ================== 平滑后性能评估 ==================
+    // ================== POST-SMOOTHING EVALUATION ==================
     std::cout << "\n===== Performance Evaluation (After Smoothing) =====" << std::endl;
     
     if (z_down > z_up) {
         double latErrSq = 0.0, lonErrSq = 0.0, altErrSq = 0.0;
         double yawErrSq = 0.0, pitchErrSq = 0.0, rollErrSq = 0.0;
-        const double Re = 6378135.072;  ///< Earth equatorial radius
+        const double Re = 6378135.072;  ///< Earth equatorial radius (WGS84)
         
-        // Calculate RMS errors for each navigation parameter
+        // Accumulate squared errors for smoothed solution
         for (int i = z_up; i < z_down; i++) {
-            // Position errors in meters
+            // Position errors converted to meters
             latErrSq += pow((smoothed_state.Latitude[i] - track.lat[i]) * M_PI / 180.0 * Re, 2);
             lonErrSq += pow((smoothed_state.Longitude[i] - track.lon[i]) * M_PI / 180.0 * Re, 2);
             altErrSq += pow(smoothed_state.Altitude[i] - track.alt[i], 2);
@@ -192,7 +189,7 @@ int main() {
             rollErrSq += pow(smoothed_state.Roll[i] - track.roll[i], 2);
         }
         
-        // Calculate and display RMS errors
+        // Calculate and display RMS metrics for smoothed solution
         int n = z_down - z_up;
         std::cout << std::fixed << std::setprecision(6);
         std::cout << "=== EKF Smoothed Performance Evaluation ===" << std::endl;

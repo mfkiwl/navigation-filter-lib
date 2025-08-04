@@ -1,3 +1,17 @@
+/**
+ * @file RtsSmoother.hpp
+ * @brief Implements Rauch-Tung-Striebel (RTS) smoothing for navigation systems
+ *
+ * This class provides backward-pass smoothing for Kalman filter-based navigation systems,
+ * improving state estimates by incorporating future measurements. It stores filter history
+ * during forward processing and performs smoothing offline.
+ *
+ * @author peanut-nav
+ * @date Created: 2025-08-04
+ * @last Modified: 2025-08-04
+ * @version 0.3.0
+ */
+
 #pragma once
 #include <vector>
 #include <Eigen/Dense>
@@ -6,61 +20,69 @@
 
 class RtsSmoother {
 public:
-    // 历史数据结构
+    /// History data structure for storing Kalman filter states
     struct FilterHistory {
-        Eigen::VectorXd state;               // 后验滤波状态 (x_filter_save)
-        Eigen::VectorXd predicted_state;     // 预测状态 (x_expect_save)
-        Eigen::MatrixXd covariance;          // 后验滤波协方差 (p_filter_save)
-        Eigen::MatrixXd predicted_covariance;// 预测协方差 (p_expect_save)
-        Eigen::MatrixXd transition_matrix;   // 状态转移矩阵
-        NavigationState nav_state;           // 导航状态快照
+        Eigen::VectorXd state;               ///< Posterior filter state
+        Eigen::VectorXd predicted_state;     ///< Predicted state
+        Eigen::MatrixXd covariance;          ///< Posterior covariance
+        Eigen::MatrixXd predicted_covariance;///< Predicted covariance
+        Eigen::MatrixXd transition_matrix;   ///< State transition matrix
+        NavigationState nav_state;           ///< Navigation state snapshot
     };
 
-    // 平滑结果
+    /// Result structure for RTS smoothing
     struct SmoothResult {
-        std::vector<Eigen::VectorXd> smoothed_states;      // 平滑后的状态
-        std::vector<Eigen::MatrixXd> smoothed_covariances; // 平滑后的协方差
-        std::vector<NavigationState> smoothed_nav_states;  // 平滑后的导航状态
-        std::vector<Eigen::Vector3d> velocity_smooth;      // 平滑后的速度
-        std::vector<Eigen::Vector3d> position_smooth;      // 平滑后的位置 [纬度, 经度, 高度]
-        std::vector<Eigen::Vector3d> attitude_smooth;      // 平滑后的姿态 [航向, 俯仰, 横滚]
+        std::vector<Eigen::VectorXd> smoothed_states;      ///< Smoothed state vectors
+        std::vector<Eigen::MatrixXd> smoothed_covariances; ///< Smoothed covariance matrices
+        std::vector<NavigationState> smoothed_nav_states;  ///< Smoothed navigation states
+        std::vector<Eigen::Vector3d> velocity_smooth;      ///< Smoothed velocities [vE, vN, vU]
+        std::vector<Eigen::Vector3d> position_smooth;      ///< Smoothed positions [lat, lon, alt]
+        std::vector<Eigen::Vector3d> attitude_smooth;      ///< Smoothed attitudes [yaw, pitch, roll]
     };
 
     /**
-     * @brief 添加历史数据点
+     * @brief Add filter history item for smoothing
      * 
-     * @param history_item 历史数据结构
+     * Stores Kalman filter state at each measurement update for later smoothing
+     * 
+     * @param history_item Contains filter state, covariance and navigation state
      */
     void addHistoryItem(const FilterHistory& history_item);
     
     /**
-     * @brief 执行RTS平滑
+     * @brief Perform RTS smoothing on stored history
      * 
-     * @param process_noise 过程噪声矩阵
-     * @return SmoothResult 平滑结果
+     * Executes backward pass smoothing algorithm to improve state estimates
+     * 
+     * @param process_noise Process noise matrix (Q)
+     * @return SmoothResult containing smoothed states and covariances
      */
     SmoothResult smooth(const Eigen::MatrixXd& process_noise);
     
     /**
-     * @brief 生成平滑后的导航结果
+     * @brief Generate navigation solution from smoothing results
      * 
-     * @param result 平滑结果
-     * @param totalPoints 总点数
-     * @return std::vector<std::vector<double>> 平滑后的导航数据矩阵
+     * Formats smoothed states into a navigation solution matrix
+     * 
+     * @param result Smoothing results from smooth() method
+     * @param totalPoints Total points in navigation solution
+     * @return Matrix of smoothed navigation parameters
      */
     std::vector<std::vector<double>> generateSmoothedNavigation(const SmoothResult& result, int totalPoints);
     
     /**
-     * @brief 执行后处理导航解算
+     * @brief Post-process navigation using smoothing results
      * 
-     * @param imu IMU数据
-     * @param track 参考轨迹
-     * @param initial_state 初始导航状态
-     * @param earth_params 地球参数
-     * @param smooth_result 平滑结果
-     * @param gps_rate GPS更新率
-     * @param imu_rate IMU更新率
-     * @return NavigationState 后处理导航状态
+     * Re-runs navigation with smoothed corrections applied at measurement points
+     * 
+     * @param imu IMU data sequence
+     * @param track Reference trajectory data
+     * @param initial_state Initial navigation state
+     * @param earth_params Earth model parameters
+     * @param smooth_result Results from smoothing algorithm
+     * @param gps_rate GPS measurement rate (Hz)
+     * @param imu_rate IMU sampling rate (Hz)
+     * @return Refined navigation state with smoothing corrections
      */
     NavigationState postProcessNavigation(
         const IMUData& imu,
@@ -72,26 +94,29 @@ public:
         int imu_rate);
 
 private:
-    std::vector<FilterHistory> history_;  // 历史数据存储
+    std::vector<FilterHistory> history_;  ///< Storage for filter history data
 
     /**
-     * @brief 计算失准角对应的方向余弦矩阵
+     * @brief Compute misalignment DCM
      * 
-     * @param E_err 东失准角 (弧度)
-     * @param N_err 北失准角 (弧度)
-     * @param U_err 天失准角 (弧度)
-     * @return Eigen::Matrix3d 方向余弦矩阵
+     * Calculates direction cosine matrix from misalignment angles
+     * 
+     * @param E_err East misalignment angle (rad)
+     * @param N_err North misalignment angle (rad)
+     * @param U_err Up misalignment angle (rad)
+     * @return Direction cosine matrix for misalignment correction
      */
     Eigen::Matrix3d computeCtn(double E_err, double N_err, double U_err) const;
     
     /**
-     * @brief 计算原始方向余弦矩阵
+     * @brief Compute body-to-navigation DCM
      * 
-     * @param yaw 航向角 (度)
-     * @param pitch 俯仰角 (度)
-     * @param roll 横滚角 (度)
-     * @return Eigen::Matrix3d 方向余弦矩阵
+     * Calculates direction cosine matrix from Euler angles
+     * 
+     * @param yaw Yaw angle (degrees)
+     * @param pitch Pitch angle (degrees)
+     * @param roll Roll angle (degrees)
+     * @return Direction cosine matrix (Cnb)
      */
     Eigen::Matrix3d computeCnb(double yaw, double pitch, double roll) const;
 };
-

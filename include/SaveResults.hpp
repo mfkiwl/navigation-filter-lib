@@ -6,8 +6,8 @@
  *
  * @author peanut-nav
  * @date Created: 2025-07-22
- * @last Modified: 2025-07-22
- * @version 0.1
+ * @last Modified: 2025-08-04
+ * @version 0.3.0
  */
 
 #pragma once
@@ -15,7 +15,7 @@
 #include "DataLoader.hpp"
 #include <fstream>
 #include <iomanip>
-#include <string>  // 添加 string 头文件
+#include <string>
 
 /**
  * @brief Navigation results saving class

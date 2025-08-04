@@ -332,8 +332,8 @@ def visualize_results(state, track, output_dir=None, imu_rate=200, sim_time=600)
         plt.savefig(os.path.join(output_dir, 'reference_trajectory.png'))
     
     # ===== Performance Statistics Calculation =====
-    z_up = 20000
-    z_down = min(120000, len(t1))
+    z_up = 220000
+    z_down = min(280000, len(t1))
     
     if z_down > z_up:
         # Convert position errors to meters for RMS calculation
@@ -388,7 +388,7 @@ if __name__ == "__main__":
         description='Navigation Results Visualization Tool',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
-    parser.add_argument('--navoutq', type=str, default="../output/KF_navoutQ.dat",
+    parser.add_argument('--navoutq', type=str, default="../output/smoothed_EKF_navoutQ.dat",
                         help='Path to navigation results file')
     parser.add_argument('--track', type=str, default="../data/track.dat",
                         help='Path to reference trajectory file')

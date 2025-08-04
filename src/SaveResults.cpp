@@ -4,8 +4,8 @@
  *
  * @author peanut-nav
  * @date Created: 2025-07-22
- * @last Modified: 2025-07-22
- * @version 0.1
+ * @last Modified: 2025-08-04
+ * @version 0.3.0
  */
 
 #include "SaveResults.hpp"
@@ -20,7 +20,6 @@
 void SaveResults::saveNavigationResults(const NavigationState& state, 
                                        const IMUData& imu,
                                        const std::string& prefix) {
-    // 创建带前缀的文件名
     std::string filename = "../output/" + prefix + "_navoutQ.dat";
     
     // Open output file

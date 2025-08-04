@@ -6,8 +6,8 @@
  *
  * @author peanut-nav
  * @date Created: 2025-07-22
- * @last Modified: 2025-07-22
- * @version 0.1
+ * @last Modified: 2025-08-04
+ * @version 0.3.0
  */
  
 #pragma once
@@ -29,12 +29,10 @@ public:
                           int totalPoints) override;
  
 private:
-    // 配置参数
     int IMUrate_;    ///< IMU sampling rate (Hz)
     int GPSrate_;    ///< GPS sampling rate (Hz)
     int simTime_;    ///< Total simulation time (seconds)
     
-    // 初始导航数据
     double lat_rad_ = 0.0;    ///< Initial latitude (radians)
     double lon_rad_ = 0.0;    ///< Initial longitude (radians)
     double h0_ = 0.0;         ///< Initial altitude (meters)
