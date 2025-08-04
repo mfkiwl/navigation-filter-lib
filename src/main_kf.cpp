@@ -14,7 +14,8 @@
 
 #include "DataLoader.hpp"
 #include "initializers/KfInitializer.hpp"
-#include "core/KfNavigation.hpp"  // 更新为新的导航核心头文件
+#include "core/KfNavigation.hpp"
+#include "core/RtsSmoother.hpp"
 #include "SaveResults.hpp"
 #include "NavigationParams.hpp"
 #include <iostream>
@@ -102,7 +103,7 @@ int main() {
     
     // 更新状态引用（如果需要）
     state = nav.getState();
-    
+ 
     std::cout << "\nNavigation algorithm completed" << std::endl;
     // ================== 导航解算部分更新结束 ==================
     
@@ -111,7 +112,7 @@ int main() {
     SaveResults::saveNavigationResults(state, imu);
     
     // Performance evaluation
-    std::cout << "\n===== Performance Evaluation =====" << std::endl;
+    std::cout << "\n===== Performance Evaluation (Before Smoothing) =====" << std::endl;
     int z_up = 220000;     ///< Start index for performance evaluation
     int z_down = std::min(280000, static_cast<int>(track.time.size()));  ///< End index
     
@@ -131,6 +132,62 @@ int main() {
             yawErrSq += pow(state.Yaw[i] - track.yaw[i], 2);
             pitchErrSq += pow(state.Pitch[i] - track.pitch[i], 2);
             rollErrSq += pow(state.Roll[i] - track.roll[i], 2);
+        }
+        
+        // Calculate and display RMS errors
+        int n = z_down - z_up;
+        std::cout << std::fixed << std::setprecision(6);
+        std::cout << "Latitude RMS error: " << sqrt(latErrSq / n) << " m" << std::endl;
+        std::cout << "Longitude RMS error: " << sqrt(lonErrSq / n) << " m" << std::endl;
+        std::cout << "Altitude RMS error: " << sqrt(altErrSq / n) << " m" << std::endl;
+        std::cout << "Yaw RMS error: " << sqrt(yawErrSq / n) << " °" << std::endl;
+        std::cout << "Pitch RMS error: " << sqrt(pitchErrSq / n) << " °" << std::endl;
+        std::cout << "Roll RMS error: " << sqrt(rollErrSq / n) << " °" << std::endl;
+    }
+    
+    // ================== RTS 平滑处理 ==================
+    std::cout << "\n===== Running RTS Smoothing =====" << std::endl;
+    
+    // 获取 RTS 平滑器
+    RtsSmoother& rts_smoother = nav.getRtsSmoother();
+    
+    // 执行 RTS 平滑
+    RtsSmoother::SmoothResult smooth_result = rts_smoother.smooth(params.kalman_params.Q);
+    
+    // 生成平滑后的导航结果
+    NavigationState smoothed_state = rts_smoother.postProcessNavigation(
+        imu,
+        track,
+        state,  // 使用原始状态作为初始状态
+        params.earth_params,
+        smooth_result,
+        params.gps_rate,
+        params.imu_rate
+    );
+    
+    // 保存平滑后的结果
+    std::cout << "\nSaving smoothed navigation results..." << std::endl;
+    SaveResults::saveNavigationResults(smoothed_state, imu, "smoothed_KF");
+    
+    // ================== 平滑后性能评估 ==================
+    std::cout << "\n===== Performance Evaluation (After Smoothing) =====" << std::endl;
+    
+    if (z_down > z_up) {
+        double latErrSq = 0.0, lonErrSq = 0.0, altErrSq = 0.0;
+        double yawErrSq = 0.0, pitchErrSq = 0.0, rollErrSq = 0.0;
+        const double Re = 6378135.072;  ///< Earth equatorial radius
+        
+        // Calculate RMS errors for each navigation parameter
+        for (int i = z_up; i < z_down; i++) {
+            // Position errors in meters
+            latErrSq += pow((smoothed_state.Latitude[i] - track.lat[i]) * M_PI / 180.0 * Re, 2);
+            lonErrSq += pow((smoothed_state.Longitude[i] - track.lon[i]) * M_PI / 180.0 * Re, 2);
+            altErrSq += pow(smoothed_state.Altitude[i] - track.alt[i], 2);
+            
+            // Attitude errors in degrees
+            yawErrSq += pow(smoothed_state.Yaw[i] - track.yaw[i], 2);
+            pitchErrSq += pow(smoothed_state.Pitch[i] - track.pitch[i], 2);
+            rollErrSq += pow(smoothed_state.Roll[i] - track.roll[i], 2);
         }
         
         // Calculate and display RMS errors

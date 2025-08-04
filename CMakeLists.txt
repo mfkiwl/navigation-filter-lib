@@ -50,7 +50,7 @@ target_include_directories(DataLoader PUBLIC include)
 # SystemInitializer library (initializes navigation parameters and state)
 add_library(SystemInitializer 
     src/initializers/KfInitializer.cpp
-    src/initializers/EkfInitializer.cpp  # 添加EKF初始化器
+    src/initializers/EkfInitializer.cpp
 )
 target_link_libraries(SystemInitializer MathUtils DataLoader)
 target_include_directories(SystemInitializer 
@@ -63,7 +63,8 @@ target_include_directories(SystemInitializer
 # NavigationAlgorithms library (core navigation algorithms and filtering)
 add_library(NavigationAlgorithms 
     src/core/KfNavigation.cpp
-    src/core/EkfNavigation.cpp  # 添加EKF导航算法
+    src/core/EkfNavigation.cpp
+    src/core/RtsSmoother.cpp
 )
 target_link_libraries(NavigationAlgorithms 
     MathUtils 

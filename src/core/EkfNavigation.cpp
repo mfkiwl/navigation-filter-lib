@@ -333,6 +333,38 @@ void EkfNavigation::correctErrors(int i) {
 
     // 更新参数为下一次预测做准备
     parm_old_ = parm_new_;
+
+    // ========== ADD HISTORY RECORD ==========
+    RtsSmoother::FilterHistory history_item;
+    
+    // Save filtered state (posterior)
+    history_item.state = ekf_.Xsave.col(k);
+    
+    // Save predicted state (prior)
+    history_item.predicted_state = ekf_.X_pred;
+    
+    // Save filtered covariance (posterior)
+    history_item.covariance = ekf_.P;
+    
+    // Save predicted covariance (prior)
+    history_item.predicted_covariance = ekf_.P_pred;
+    
+    // Save transition matrix (discretized)
+    history_item.transition_matrix = ekf_.disA;
+    
+    // Save current navigation state snapshot
+    history_item.nav_state.Latitude = {state_.Latitude[i+1]};
+    history_item.nav_state.Longitude = {state_.Longitude[i+1]};
+    history_item.nav_state.Altitude = {state_.Altitude[i+1]};
+    history_item.nav_state.Velocity = {state_.Velocity[i+1]};
+    history_item.nav_state.Pitch = {state_.Pitch[i+1]};
+    history_item.nav_state.Roll = {state_.Roll[i+1]};
+    history_item.nav_state.Yaw = {state_.Yaw[i+1]};
+    history_item.nav_state.CbtM = state_.CbtM;
+    history_item.nav_state.CtbM = state_.CtbM;
+    
+    // Add to RTS smoother
+    rts_smoother_.addHistoryItem(history_item);
 }
 
 // ================== Time Management ==================

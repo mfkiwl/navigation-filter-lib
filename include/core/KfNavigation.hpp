@@ -10,6 +10,7 @@
 
 #pragma once
 #include "core/NavigationBase.hpp"
+#include "core/RtsSmoother.hpp"
 #include "NavigationParams.hpp"
 #include <Eigen/Dense>
 #include <vector>
@@ -37,6 +38,8 @@ public:
     bool isMeasurementStep(int i) const override;
     
     void run(const IMUData& imu, const GPSData& gps) override;
+
+    RtsSmoother& getRtsSmoother() { return rts_smoother_; }
 
 private:
     // Configuration
@@ -131,4 +134,6 @@ private:
                           const Eigen::MatrixXd& R,
                           Eigen::VectorXd& X_new,
                           Eigen::MatrixXd& P_new);
+
+    RtsSmoother rts_smoother_;
 };

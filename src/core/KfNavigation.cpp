@@ -313,6 +313,38 @@ void KalmanFilterNavigation::correctErrors(int i) {
     
     // Update quaternion
     state_.Quaternion = NavigationUtils::eulerToQuaternion(state_.Pitch[i+1], state_.Roll[i+1], state_.Yaw[i+1]);
+
+    // ========== ADD HISTORY RECORD (CORRECT POSITION) ==========
+    RtsSmoother::FilterHistory history_item;
+    
+    // Save filtered state (posterior)
+    history_item.state = kalman_.Xsave.col(k);
+    
+    // Save predicted state (prior)
+    history_item.predicted_state = kalman_.X_pred;
+    
+    // Save filtered covariance (posterior)
+    history_item.covariance = kalman_.P;
+    
+    // Save predicted covariance (prior)
+    history_item.predicted_covariance = kalman_.P_pred;
+    
+    // Save transition matrix
+    history_item.transition_matrix = kalman_.A;
+    
+    // Save current navigation state snapshot (corrected)
+    history_item.nav_state.Latitude = {state_.Latitude[i+1]};
+    history_item.nav_state.Longitude = {state_.Longitude[i+1]};
+    history_item.nav_state.Altitude = {state_.Altitude[i+1]};
+    history_item.nav_state.Velocity = {state_.Velocity[i+1]};
+    history_item.nav_state.Pitch = {state_.Pitch[i+1]};
+    history_item.nav_state.Roll = {state_.Roll[i+1]};
+    history_item.nav_state.Yaw = {state_.Yaw[i+1]};
+    history_item.nav_state.CbtM = state_.CbtM;
+    history_item.nav_state.CtbM = state_.CtbM;
+    
+    // Add to RTS smoother
+    rts_smoother_.addHistoryItem(history_item);
 }
 
 // ================== Time Management ==================

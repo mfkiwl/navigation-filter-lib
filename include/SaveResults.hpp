@@ -15,6 +15,7 @@
 #include "DataLoader.hpp"
 #include <fstream>
 #include <iomanip>
+#include <string>  // 添加 string 头文件
 
 /**
  * @brief Navigation results saving class
@@ -28,6 +29,9 @@ public:
      * 
      * @param state Navigation state containing the results
      * @param imu IMU data used for indexing
+     * @param prefix Optional prefix for filename (default: "KF")
      */
-    static void saveNavigationResults(const NavigationState& state, const IMUData& imu);
+    static void saveNavigationResults(const NavigationState& state, 
+                                     const IMUData& imu,
+                                     const std::string& prefix = "KF");
 };
