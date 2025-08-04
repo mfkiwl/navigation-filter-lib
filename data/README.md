@@ -2,10 +2,29 @@
 
 This dataset contains synthetically generated inertial navigation and GPS measurements with realistic error characteristics. All data represents simulated sensor outputs for navigation algorithm development and testing.
 
+---
+
 ## Download
 
-📦 You can download the complete dataset from the [GitHub Release Page](https://github.com/peanut-nav/navigation-filter-lib/releases/tag/v0.1.1-data).
+📦 You can download the complete dataset from the [GitHub Release Page](https://github.com/peanut-nav/navigation-filter-lib/releases).
 → Dataset version: **v0.1.0**, published on **2025-07-23**
+→ Dataset version: **v0.3.0**, published on **2025-08-04**
+
+
+## Version Differences
+
+### v0.1.0 (Baseline, Linear Model)
+- GPS update rate: **20 Hz**  
+- Linear Gaussian noise applied to position and velocity measurements  
+- Designed for validation of the **15‑state linear KF** implementation  
+
+### v0.3.0 (Nonlinear Dataset)
+- GPS update rate: **1 Hz**  
+- Includes **nonlinear error characteristics**
+- Better suited for testing **nonlinear models such as EKF** and for evaluating **RTS smoothing**  
+- Fully reproducible: same seed handling as v0.1.0  
+
+---
 
 ## File Descriptions
 
@@ -40,6 +59,8 @@ This dataset contains synthetically generated inertial navigation and GPS measur
      - Gyroscope measurements: x_increment(rad) y_increment(rad) z_increment(rad)
      - Accelerometer measurements: x_increment(m/s) y_increment(m/s) z_increment(m/s)
 
+---
+
 ## Error Models
 
 ### GPS Measurement Noise
@@ -55,6 +76,8 @@ This dataset contains synthetically generated inertial navigation and GPS measur
 - **Accelerometer**:
   - Bias: 50 μg
   - White noise: 50μg (1σ)
+
+---
 
 ## Key Notes
 1. All angular quantities are in radians
