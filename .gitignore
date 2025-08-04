@@ -2,6 +2,8 @@
 data/
 !data/readme.md
 
+output/*.dat
+
 # 忽略构建目录
 build/
 build*/
