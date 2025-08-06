@@ -10,8 +10,8 @@ plt.rcParams['font.family'] = 'DejaVu Sans'  # Set Ubuntu-compatible font
 # Define navigation algorithm performance metrics (RMS error values)
 performance_data = {
     'KF': {  # Kalman Filter
-        'Latitude': 0.046104,   # Degrees error (converted to meters at equator)
-        'Longitude': 0.245085,  # Degrees error (converted to meters at equator)
+        'Latitude': 0.046104,   # Meters error
+        'Longitude': 0.245085,  # Meters error
         'Altitude': 0.067023,   # Meters error
         'Yaw': 0.002833,        # Degrees error
         'Pitch': 0.000083,      # Degrees error
