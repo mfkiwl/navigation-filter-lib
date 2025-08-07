@@ -2,33 +2,33 @@
  * @file main.cpp
  * @brief Main application for integrated navigation system
  *
- * Implements the main workflow of the integrated navigation system,
- * including data loading, system initialization, navigation processing,
- * RTS smoothing, results saving, and performance evaluation.
+ * Implements the main workflow using base classes for polymorphism
  *
  * @author peanut-nav
  * @date Created: 2025-07-22
- * @last Modified: 2025-08-04
- * @version 0.3.0
+ * @last Modified: 2025-08-07
+ * @version 0.3.2
  */
 
+#include "NavigationFactory.hpp"
 #include "DataLoader.hpp"
-#include "initializers/KfInitializer.hpp"
-#include "core/KfNavigation.hpp"
-#include "core/RtsSmoother.hpp"
 #include "SaveResults.hpp"
-#include "NavigationParams.hpp"
 #include <iostream>
 #include <random>
 #include <iomanip>
+#include <memory>
+#include <cmath>
 
 int main() {
+    // Create the component using the factory pattern
+    FilterType filterType = FilterType::KF;
+
     // Initialize random number generator with fixed seed for reproducibility
     std::mt19937 rng(10);
     
     // System configuration parameters
     const int IMUrate = 200;     ///< IMU sampling rate (Hz)
-    const int GPSrate = 1;      ///< GPS sampling rate (Hz)
+    const int GPSrate = 1;       ///< GPS sampling rate (Hz)
     const double simTime = 1400;  ///< Total simulation time (seconds)
     const std::string dataDir = "../data";  ///< Directory containing input datasets
     
@@ -53,60 +53,74 @@ int main() {
     // Initialize navigation system components
     std::cout << "\nInitializing navigation system..." << std::endl;
     
-    // Create Kalman Filter initializer with system parameters
-    KfInitializer initializer(IMUrate, GPSrate, simTime);
+    auto initializer = NavigationFactory::create_initializer(filterType, IMUrate, GPSrate, simTime);
+    auto base_params = NavigationFactory::create_params(filterType, IMUrate, GPSrate);
+    auto nav = NavigationFactory::create_navigation(filterType);
+
+    NavigationState state;
     
-    KfParams params;       ///< Navigation system parameters (earth model + KF)
-    NavigationState state; ///< Primary navigation state container
+    // Calculate total navigation points
+    int totalPoints = static_cast<int>(simTime * IMUrate) + 1;
     
-    // Calculate total navigation points and initialize parameters/state
-    int totalPoints = simTime * IMUrate + 1;
-    initializer.initialize_params(params, dataDir);
-    initializer.initialize_state(state, totalPoints);
-    initializer.initialize_kalman(params.kalman_params, totalPoints);
+    // Initialize parameters and state
+    initializer->initialize_params(*base_params, dataDir);
+    initializer->initialize_state(state, totalPoints);
+    initializer->initialize_kalman(*base_params, totalPoints);
     
     std::cout << "System initialization completed" << std::endl;
     std::cout << "Initial State: " << std::endl;
-    std::cout << "  Latitude: " << state.Latitude[0] << "°" << std::endl;
-    std::cout << "  Longitude: " << state.Longitude[0] << "°" << std::endl;
+    std::cout << "  Latitude: " << state.Latitude[0] << " deg" << std::endl;
+    std::cout << "  Longitude: " << state.Longitude[0] << " deg" << std::endl;
     std::cout << "  Altitude: " << state.Altitude[0] << " m" << std::endl;
-    std::cout << "  Pitch: " << state.Pitch[0] << "°" << std::endl;
-    std::cout << "  Roll: " << state.Roll[0] << "°" << std::endl;
-    std::cout << "  Yaw: " << state.Yaw[0] << "°" << std::endl;
+    std::cout << "  Pitch: " << state.Pitch[0] << " deg" << std::endl;
+    std::cout << "  Roll: " << state.Roll[0] << " deg" << std::endl;
+    std::cout << "  Yaw: " << state.Yaw[0] << " deg" << std::endl;
     
     // Display Earth model parameters
     std::cout << "\nEarth Parameters:" << std::endl;
-    std::cout << "  Re: " << params.earth_params.Re << " m" << std::endl;
-    std::cout << "  e: " << params.earth_params.e << std::endl;
-    std::cout << "  W_ie: " << params.earth_params.W_ie << " rad/s" << std::endl;
-    std::cout << "  g0: " << params.earth_params.g0 << " m/s²" << std::endl;
-    
-    // Display Kalman Filter configuration
-    std::cout << "\nKalman Filter Parameters:" << std::endl;
-    std::cout << "  N: " << params.kalman_params.N << std::endl;
-    std::cout << "  M: " << params.kalman_params.M << std::endl;
-    std::cout << "  T: " << params.kalman_params.T << " s" << std::endl;
-    std::cout << "  P matrix size: " << params.kalman_params.P.rows() 
-              << "x" << params.kalman_params.P.cols() << std::endl;
+    std::cout << "  Re: " << base_params->earth_params.Re << " m" << std::endl;
+    std::cout << "  e: " << base_params->earth_params.e << std::endl;
+    std::cout << "  W_ie: " << base_params->earth_params.W_ie << " rad/s" << std::endl;
+    std::cout << "  g0: " << base_params->earth_params.g0 << " m/s²" << std::endl;
     
     // ================== NAVIGATION PROCESSING ==================
     std::cout << "\nRunning navigation algorithm..." << std::endl;
     
-    // Initialize Kalman Filter navigation processor
-    KalmanFilterNavigation nav;
-    nav.initialize(params, state);
+    // Initialize navigation processor using base class
+    nav->initialize(*base_params, state);
     
     // Execute navigation solution using IMU and GPS data
-    nav.run(imu, gps);
+    nav->run(imu, gps);
     
-    state = nav.getState();
+    state = nav->getState();
  
     std::cout << "\nNavigation algorithm completed" << std::endl;
     // ================== NAVIGATION PROCESSING COMPLETE ==================
+    // File naming for saving results
+    std::string baseFilename;
+    std::string smoothedFilename;
+    switch (filterType) {
+        case FilterType::EKF:
+            baseFilename = "EKF";
+            smoothedFilename = "smoothed_EKF";
+            break;
+        case FilterType::KF:
+            baseFilename = "KF";
+            smoothedFilename = "smoothed_KF";
+            break;
+        case FilterType::UKF:
+            baseFilename = "UKF";
+            smoothedFilename = "smoothed_UKF";
+            break;
+        default:
+            baseFilename = "default";
+            smoothedFilename = "smoothed_default";
+            break;
+    }
     
     // Persist navigation results to storage
-    std::cout << "\nSaving navigation results..." << std::endl;
-    SaveResults::saveNavigationResults(state, imu);
+    std::cout << "\nSaving navigation results (" << baseFilename << ")..." << std::endl;
+    SaveResults::saveNavigationResults(state, imu, baseFilename);
     
     // Calculate RMS errors against reference trajectory
     std::cout << "\n===== Performance Evaluation (Before Smoothing) =====" << std::endl;
@@ -145,26 +159,36 @@ int main() {
     // ================== RTS SMOOTHING ==================
     std::cout << "\n===== Running RTS Smoothing =====" << std::endl;
     
-    // Retrieve RTS smoother instance from navigation processor
-    RtsSmoother& rts_smoother = nav.getRtsSmoother();
+    // Get RTS smoother through base class interface
+    RtsSmoother& rts_smoother = nav->getRtsSmoother();
     
-    // Execute backward-pass smoothing algorithm
-    RtsSmoother::SmoothResult smooth_result = rts_smoother.smooth(params.kalman_params.Q);
+    // Get Q matrix through polymorphic approach
+    Eigen::MatrixXd Q;
+    if (auto kf_params = dynamic_cast<KfParams*>(base_params.get())) {
+        Q = kf_params->kalman_params.Q;
+    } else if (auto ekf_params = dynamic_cast<EkfParams*>(base_params.get())) {
+        Q = ekf_params->ekf_params.Q;
+    } else {
+        throw std::runtime_error("Unknown parameters type in RTS smoother");
+    }
     
+    // Execute smoothing
+    RtsSmoother::SmoothResult smooth_result = rts_smoother.smooth(Q);
+
     // Generate refined navigation solution using smoothing corrections
     NavigationState smoothed_state = rts_smoother.postProcessNavigation(
         imu,
         track,
         state,
-        params.earth_params,
+        base_params->earth_params,
         smooth_result,
-        params.gps_rate,
-        params.imu_rate
+        base_params->gps_rate,
+        base_params->imu_rate
     );
     
     // Save smoothed navigation solution
-    std::cout << "\nSaving smoothed navigation results..." << std::endl;
-    SaveResults::saveNavigationResults(smoothed_state, imu, "smoothed_KF");
+    std::cout << "\nSaving smoothed navigation results (" << smoothedFilename << ")..." << std::endl;
+    SaveResults::saveNavigationResults(smoothed_state, imu, smoothedFilename);
     
     // ================== POST-SMOOTHING EVALUATION ==================
     std::cout << "\n===== Performance Evaluation (After Smoothing) =====" << std::endl;

@@ -7,12 +7,12 @@
  *
  * @author peanut-nav
  * @date Created: 2025-07-22
- * @last Modified: 2025-07-22
- * @version 0.3.0
+ * @last Modified: 2025-08-07
+ * @version 0.3.2
  */
 
 #pragma once
-#include "NavigationParams.hpp"
+#include "core/RtsSmoother.hpp"
 #include <Eigen/Dense>
 
 class NavigationBase {
@@ -82,4 +82,7 @@ public:
      * @param gps GPS data
      */
     virtual void run(const IMUData& imu, const GPSData& gps) = 0;
+
+    // Added virtual function for RTS smoother
+    virtual RtsSmoother& getRtsSmoother() = 0;
 };

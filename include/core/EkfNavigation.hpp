@@ -8,13 +8,13 @@
  *
  * @author peanut-nav
  * @date Created: 2025-07-22
- * @last Modified: 2025-08-04
- * @version 0.3.0
+ * @last Modified: 2025-08-07
+ * @version 0.3.2
  */
 
 #pragma once
 #include "core/NavigationBase.hpp"
-#include "NavigationParams.hpp"
+#include "../params/EkfParams.hpp"
 #include "core/RtsSmoother.hpp"
 #include "MathUtils.hpp"
 #include <Eigen/Dense>
@@ -98,7 +98,7 @@ public:
      * 
      * @return Reference to RTS smoother
      */
-    RtsSmoother& getRtsSmoother() { return rts_smoother_; }
+    RtsSmoother& getRtsSmoother() override { return rts_smoother_; }
 
 private:
     // Configuration

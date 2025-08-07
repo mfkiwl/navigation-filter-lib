@@ -11,7 +11,7 @@
  */
 
 #pragma once
-#include "NavigationParams.hpp"
+#include "params/NavParamsBase.hpp"
 #include "DataLoader.hpp"
 #include <fstream>
 #include <iomanip>

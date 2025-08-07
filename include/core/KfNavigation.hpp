@@ -8,14 +8,14 @@
  *
  * @author peanut-nav
  * @date Created: 2025-07-22
- * @last Modified: 2025-08-04
- * @version 0.3.0
+ * @last Modified: 2025-08-07
+ * @version 0.3.2
  */
 
 #pragma once
 #include "core/NavigationBase.hpp"   // Base navigation interface
+#include "../params/KfParams.hpp"
 #include "core/RtsSmoother.hpp"      // Rauch-Tung-Striebel smoother
-#include "NavigationParams.hpp"      // Navigation parameters
 #include <Eigen/Dense>               // Matrix and vector operations
 #include <vector>                    // Standard vector container
 
@@ -96,7 +96,7 @@ public:
      * 
      * @return Reference to Rauch-Tung-Striebel smoother
      */
-    RtsSmoother& getRtsSmoother() { return rts_smoother_; }
+    RtsSmoother& getRtsSmoother() override { return rts_smoother_; }
 
 private:
     // Configuration parameters

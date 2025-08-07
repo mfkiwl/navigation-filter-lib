@@ -12,7 +12,7 @@
  */
 
 #pragma once
-#include "NavigationParams.hpp"
+#include "params/NavParamsBase.hpp"
 #include <string>
 
 /**

@@ -15,7 +15,7 @@
 #pragma once
 #include <vector>
 #include <Eigen/Dense>
-#include "NavigationParams.hpp"
+#include "../params/NavParamsBase.hpp"
 #include "MathUtils.hpp"
 
 class RtsSmoother {

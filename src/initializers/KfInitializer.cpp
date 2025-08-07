@@ -4,8 +4,8 @@
  *
  * @author peanut-nav
  * @date Created: 2025-07-22
- * @last Modified: 2025-08-04
- * @version 0.3.0
+ * @last Modified: 2025-08-07
+ * @version 0.3.2
  */
  
 #include "initializers/KfInitializer.hpp"
@@ -87,8 +87,10 @@ void KfInitializer::initialize_state(NavigationState& state,
 }
  
 // Initialize Kalman filter parameters
-void KfInitializer::initialize_kalman(KalmanFilterParams& kalman, 
+void KfInitializer::initialize_kalman(NavParamsBase& base_params, 
                                      int totalPoints) {
+    KalmanFilterParams& kalman = static_cast<KfParams&>(base_params).kalman_params;
+
     // Calculate measurement update interval
     kalman.N = IMUrate_ / GPSrate_;
     

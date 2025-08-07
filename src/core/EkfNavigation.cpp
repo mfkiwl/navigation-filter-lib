@@ -15,7 +15,7 @@
  * @version 0.3.0
  */
 
-#include "core/EkfNavigation.hpp"
+#include "NavigationFactory.hpp"
 #include "MathUtils.hpp"
 #include <iostream>
 #include <iomanip>

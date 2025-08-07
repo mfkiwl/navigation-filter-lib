@@ -13,7 +13,7 @@
  * @version 0.3.0
  */
 
-#include "core/KfNavigation.hpp"
+#include "NavigationFactory.hpp"
 #include "MathUtils.hpp"
 #include <iostream>
 #include <iomanip>

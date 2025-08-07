@@ -4,8 +4,8 @@
  *
  * @author peanut-nav
  * @date Created: 2025-07-22
- * @last Modified: 2025-08-04
- * @version 0.3.0
+ * @last Modified: 2025-08-07
+ * @version 0.3.2
  */
 
 #include "initializers/EkfInitializer.hpp"
@@ -78,8 +78,10 @@ void EkfInitializer::initialize_state(NavigationState& state,
     state.Quaternion = NavigationUtils::eulerToQuaternion(state.Pitch[0], state.Roll[0], state.Yaw[0]);
 }
 
-void EkfInitializer::initialize_ekf(ExtendedKalmanFilterParams& ekf_params, 
+void EkfInitializer::initialize_kalman(NavParamsBase& base_params, 
                                    int totalPoints) {
+    ExtendedKalmanFilterParams& ekf_params = static_cast<EkfParams&>(base_params).ekf_params;
+    
     // Calculate IMU/GPS update ratio
     ekf_params.N = IMUrate_ / GPSrate_;
     
