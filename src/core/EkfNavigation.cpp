@@ -78,7 +78,9 @@ void EkfNavigation::updateStrapdown(const IMUData& imu, int i) {
     // Convert gyro data from deg/h to rad/s and update attitude
     Vector3d wtb_b(imu.gx[i], imu.gy[i], imu.gz[i]);
     wtb_b = wtb_b * (M_PI/(3600.0*180.0));
-    updateAttitude(wtb_b);
+
+    strapdownAttitudeUpdate(wtb_b, wit_b_, state_.Quaternion, params_.imu_rate, state_.CbtM);
+    state_.CtbM = state_.CbtM.transpose();  // Update inverse transformation
     
     // Convert accelerometer data to navigation frame
     Vector3d f_b(imu.ax[i], imu.ay[i], imu.az[i]);
@@ -99,7 +101,38 @@ void EkfNavigation::updateStrapdown(const IMUData& imu, int i) {
               state_.Velocity[i](0) * tan(lat_i_rad)/(current_Rx_ + state_.Altitude[i]);
     
     // Update velocity and position
-    updateVelocityPosition(last_f_INSt_);
+    Vector3d V_new;
+    double Lat_new, Lon_new, h_new, Rx_new, Ry_new;
+    
+    strapdownVelocityPositionUpdate(
+        last_f_INSt_, 
+        state_.Velocity[i], 
+        state_.Latitude[i], 
+        state_.Longitude[i], 
+        state_.Altitude[i],
+        wie_n_, 
+        wet_t_, 
+        g,
+        params_.imu_rate,
+        params_.earth_params.Re, 
+        params_.earth_params.e,
+        current_Rx_, 
+        current_Ry_,
+        V_new, 
+        Lat_new, 
+        Lon_new, 
+        h_new, 
+        Rx_new, 
+        Ry_new
+    );
+    
+    // Update navigation state
+    state_.Velocity[i+1] = V_new;
+    state_.Latitude[i+1] = Lat_new;
+    state_.Longitude[i+1] = Lon_new;
+    state_.Altitude[i+1] = h_new;
+    current_Rx_ = Rx_new;
+    current_Ry_ = Ry_new;
     
     // Update total angular rate in body frame
     Vector3d wit_t = wie_n_ + wet_t_;
@@ -157,51 +190,102 @@ void EkfNavigation::updateStrapdown(const IMUData& imu, int i) {
 }
 
 /**
- * @brief Update attitude using angular rates
+ * @brief Update attitude using quaternion integration
  */
-void EkfNavigation::updateAttitude(const Vector3d& wtb_b) {
-    strapdownAttitudeUpdate(wtb_b, wit_b_, state_.Quaternion, params_.imu_rate, state_.CbtM);
-    state_.CtbM = state_.CbtM.transpose();  // Update inverse transformation
+void EkfNavigation::strapdownAttitudeUpdate(const Vector3d& wtb_b,
+                                          const Vector3d& wit_b,
+                                          Vector4d& quat,
+                                          int IMUrate,
+                                          Matrix3d& CbtM) {
+    // Compute relative angular rate
+    Vector3d delta_w = wtb_b - wit_b;
+    double sita0 = delta_w.norm() * (1.0/IMUrate);
+    
+    // Construct quaternion update matrix
+    Matrix4d sita = Matrix4d::Zero();
+    sita << 0,          -delta_w(0), -delta_w(1), -delta_w(2),
+            delta_w(0),  0,           delta_w(2), -delta_w(1),
+            delta_w(1), -delta_w(2),  0,           delta_w(0),
+            delta_w(2),  delta_w(1), -delta_w(0),  0;
+    sita /= IMUrate;
+    
+    // Compute rotation quaternion
+    Matrix4d I = Matrix4d::Identity();
+    Matrix4d rotation = cos(sita0/2) * I + (sin(sita0/2)/sita0 * sita);
+    
+    // Update quaternion
+    quat = rotation * quat;
+    quat.normalize();
+    
+    // Convert quaternion to direction cosine matrix
+    double q0 = quat(0), q1 = quat(1), q2 = quat(2), q3 = quat(3);
+    CbtM << q0*q0 + q1*q1 - q2*q2 - q3*q3, 2*(q1*q2 + q0*q3),        2*(q1*q3 - q0*q2),
+            2*(q1*q2 - q0*q3),        q0*q0 - q1*q1 + q2*q2 - q3*q3, 2*(q2*q3 + q0*q1),
+            2*(q1*q3 + q0*q2),        2*(q2*q3 - q0*q1),        q0*q0 - q1*q1 - q2*q2 + q3*q3;
 }
  
 /**
- * @brief Update velocity and position
+ * @brief Update velocity and position using mechanization
  */
-void EkfNavigation::updateVelocityPosition(const Vector3d& f_INSt) {
-    int i = current_index_;
-    Vector3d V_new;
-    double Lat_new, Lon_new, h_new, Rx_new, Ry_new;
+void EkfNavigation::strapdownVelocityPositionUpdate(const Vector3d& f_INSt,
+                                                  const Vector3d& V_prev,
+                                                  double Lat_prev,
+                                                  double Lon_prev,
+                                                  double h_prev,
+                                                  const Vector3d& wie_n,
+                                                  const Vector3d& wet_t,
+                                                  double g,
+                                                  int IMUrate,
+                                                  double Re,
+                                                  double e,
+                                                  double Rx_prev,
+                                                  double Ry_prev,
+                                                  Vector3d& V_new,
+                                                  double& Lat_new,
+                                                  double& Lon_new,
+                                                  double& h_new,
+                                                  double& Rx,
+                                                  double& Ry) {
+    // Compute Coriolis acceleration
+    Vector3d coriolis = 2 * wie_n + wet_t;
+    Vector3d a = f_INSt - coriolis.cross(V_prev);
+    a += Vector3d(0, 0, -g);  // Add gravity
     
-    // Perform velocity and position update
-    strapdownVelocityPositionUpdate(
-        f_INSt, 
-        state_.Velocity[i], 
-        state_.Latitude[i], 
-        state_.Longitude[i], 
-        state_.Altitude[i],
-        wie_n_, 
-        wet_t_, 
-        computeGravity(state_.Latitude[i], state_.Altitude[i], params_.earth_params),
-        params_.imu_rate,
-        params_.earth_params.Re, 
-        params_.earth_params.e,
-        current_Rx_, 
-        current_Ry_,
-        V_new, 
-        Lat_new, 
-        Lon_new, 
-        h_new, 
-        Rx_new, 
-        Ry_new
-    );
+    // Update velocity using trapezoidal integration
+    V_new = V_prev + (1.0/IMUrate) * a;
     
-    // Update navigation state
-    state_.Velocity[i+1] = V_new;
-    state_.Latitude[i+1] = Lat_new;
-    state_.Longitude[i+1] = Lon_new;
-    state_.Altitude[i+1] = h_new;
-    current_Rx_ = Rx_new;
-    current_Ry_ = Ry_new;
+    // Update position
+    double deltaT = 1.0/IMUrate;
+    double Ry_h = Ry_prev + h_prev;
+    double Rx_h = Rx_prev + h_prev;
+    double cosLat = cos(Lat_prev * M_PI/180.0);
+    
+    // Latitude update (deg)
+    Lat_new = Lat_prev + deltaT * (V_prev(1) + V_new(1)) * 180.0 / (2 * Ry_h * M_PI);
+    
+    // Longitude update (deg)
+    Lon_new = Lon_prev + deltaT * (V_prev(0) + V_new(0)) * 180.0 / (2 * Rx_h * cosLat * M_PI);
+    
+    // Altitude update (m)
+    h_new = h_prev + deltaT * (V_prev(2) + V_new(2)) / 2.0;
+    
+    // Update Earth curvature radii
+    double sinLat = sin(Lat_new * M_PI/180.0);
+    Rx = Re / (1 - e * sinLat * sinLat);  // Meridian radius
+    Ry = Re / (1 + 2*e - 3*e * sinLat * sinLat);  // Transverse radius
+}
+ 
+/**
+ * @brief Compute gravity magnitude
+ * 
+ * @return Gravity magnitude (m/s²)
+ */
+double EkfNavigation::computeGravity(double Latitude, double h, const NavigationParams& params) {
+    double sinLat = sin(Latitude * M_PI/180.0);
+    double sin2Lat = sinLat * sinLat;
+    double denominator = sqrt(1 - params.gk2 * sin2Lat);
+    double factor = (1 - 2*h/params.Re) / denominator;
+    return params.g0 * (1 + params.gk1 * sin2Lat) * factor;
 }
  
 // ================== State Prediction ==================
@@ -248,6 +332,34 @@ void EkfNavigation::discretizeSystem(double dt) {
     // Discretize continuous-time model
     ltiDiscretize(ekf_.A, G_mid_, ekf_.Q, dt, ekf_.disA, ekf_.disQ);
 }
+
+/**
+ * @brief Discretize linear time-invariant system
+ */
+void EkfNavigation::ltiDiscretize(const Eigen::MatrixXd& F, 
+                                 const Eigen::MatrixXd& G, 
+                                 const Eigen::MatrixXd& Qc, 
+                                 double dt,
+                                 Eigen::MatrixXd& A, 
+                                 Eigen::MatrixXd& Q) {
+    // Discretize state transition matrix using matrix exponential
+    int n = F.rows();
+    MatrixXd I = MatrixXd::Identity(n, n);
+    A = (F * dt).exp();
+    
+    // Discretize process noise using Van Loan's method
+    MatrixXd Phi = MatrixXd::Zero(2*n, 2*n);
+    Phi.block(0,0,n,n) = F;
+    Phi.block(0,n,n,n) = G * Qc * G.transpose();
+    Phi.block(n,n,n,n) = -F.transpose();
+    
+    MatrixXd G0(2*n, n);
+    G0 << MatrixXd::Zero(n, n), MatrixXd::Identity(n, n);
+ 
+    MatrixXd AB = (Phi * dt).exp() * G0;
+ 
+    Q = AB.block(0,0,n,n) * AB.block(n,0,n,n).inverse();
+}
  
 /**
  * @brief Execute EKF prediction step
@@ -264,6 +376,28 @@ void EkfNavigation::runEkfPrediction(int i) {
     
     // Covariance prediction
     ekf_.P_pred = ekf_.disA * ekf_.P * ekf_.disA.transpose() + ekf_.disQ;
+}
+
+/**
+ * @brief Perform Runge-Kutta 4 integration
+ * 
+ * @return Predicted state
+ */
+Eigen::VectorXd EkfNavigation::rungeKutta4(const Eigen::VectorXd& X, 
+                                          const Eigen::MatrixXd& Uparm, 
+                                          double dt) {
+    // Extract parameters for RK4 stages
+    MatrixXd parm_old = Uparm.block<6,3>(0,0);
+    MatrixXd parm_mid = Uparm.block<6,3>(0,3);
+    MatrixXd parm_new = Uparm.block<6,3>(0,6);
+    
+    // RK4 stages
+    VectorXd k1 = computeStateDerivative(X, parm_old);
+    VectorXd k2 = computeStateDerivative(X + 0.5 * dt * k1, parm_mid);
+    VectorXd k3 = computeStateDerivative(X + 0.5 * dt * k2, parm_mid);
+    VectorXd k4 = computeStateDerivative(X + dt * k3, parm_new);
+    
+    return X + dt / 6.0 * (k1 + 2*k2 + 2*k3 + k4);
 }
 
 // ================== Measurement Update ==================
@@ -425,14 +559,7 @@ void EkfNavigation::correctErrors(int i) {
     rts_smoother_.addHistoryItem(history_item);
 }
 
-// ================== Time Management ==================
-/**
- * @brief Advance to next time step
- */
-void EkfNavigation::advance() {
-    current_index_++;
-}
- 
+// ================== Main Run Loop ==================
 /**
  * @brief Check if current step is measurement update step
  * 
@@ -442,7 +569,6 @@ bool EkfNavigation::isMeasurementStep(int i) const {
     return (i + 1) % measurement_interval_ == 0;
 }
 
-// ================== Main Run Loop ==================
 /**
  * @brief Execute full navigation processing sequence
  */
@@ -464,112 +590,9 @@ void EkfNavigation::run(const IMUData& imu, const GPSData& gps) {
             // Error correction
             correctErrors(i);
         }
-        
-        // Advance to next time step
-        advance();
     }
 }
  
-// ================== Algorithm Implementations ==================
-/**
- * @brief Update attitude using quaternion integration
- */
-void EkfNavigation::strapdownAttitudeUpdate(const Vector3d& wtb_b,
-                                          const Vector3d& wit_b,
-                                          Vector4d& quat,
-                                          int IMUrate,
-                                          Matrix3d& CbtM) {
-    // Compute relative angular rate
-    Vector3d delta_w = wtb_b - wit_b;
-    double sita0 = delta_w.norm() * (1.0/IMUrate);
-    
-    // Construct quaternion update matrix
-    Matrix4d sita = Matrix4d::Zero();
-    sita << 0,          -delta_w(0), -delta_w(1), -delta_w(2),
-            delta_w(0),  0,           delta_w(2), -delta_w(1),
-            delta_w(1), -delta_w(2),  0,           delta_w(0),
-            delta_w(2),  delta_w(1), -delta_w(0),  0;
-    sita /= IMUrate;
-    
-    // Compute rotation quaternion
-    Matrix4d I = Matrix4d::Identity();
-    Matrix4d rotation = cos(sita0/2) * I + (sin(sita0/2)/sita0 * sita);
-    
-    // Update quaternion
-    quat = rotation * quat;
-    quat.normalize();
-    
-    // Convert quaternion to direction cosine matrix
-    double q0 = quat(0), q1 = quat(1), q2 = quat(2), q3 = quat(3);
-    CbtM << q0*q0 + q1*q1 - q2*q2 - q3*q3, 2*(q1*q2 + q0*q3),        2*(q1*q3 - q0*q2),
-            2*(q1*q2 - q0*q3),        q0*q0 - q1*q1 + q2*q2 - q3*q3, 2*(q2*q3 + q0*q1),
-            2*(q1*q3 + q0*q2),        2*(q2*q3 - q0*q1),        q0*q0 - q1*q1 - q2*q2 + q3*q3;
-}
- 
-/**
- * @brief Update velocity and position using mechanization
- */
-void EkfNavigation::strapdownVelocityPositionUpdate(const Vector3d& f_INSt,
-                                                  const Vector3d& V_prev,
-                                                  double Lat_prev,
-                                                  double Lon_prev,
-                                                  double h_prev,
-                                                  const Vector3d& wie_n,
-                                                  const Vector3d& wet_t,
-                                                  double g,
-                                                  int IMUrate,
-                                                  double Re,
-                                                  double e,
-                                                  double Rx_prev,
-                                                  double Ry_prev,
-                                                  Vector3d& V_new,
-                                                  double& Lat_new,
-                                                  double& Lon_new,
-                                                  double& h_new,
-                                                  double& Rx,
-                                                  double& Ry) {
-    // Compute Coriolis acceleration
-    Vector3d coriolis = 2 * wie_n + wet_t;
-    Vector3d a = f_INSt - coriolis.cross(V_prev);
-    a += Vector3d(0, 0, -g);  // Add gravity
-    
-    // Update velocity using trapezoidal integration
-    V_new = V_prev + (1.0/IMUrate) * a;
-    
-    // Update position
-    double deltaT = 1.0/IMUrate;
-    double Ry_h = Ry_prev + h_prev;
-    double Rx_h = Rx_prev + h_prev;
-    double cosLat = cos(Lat_prev * M_PI/180.0);
-    
-    // Latitude update (deg)
-    Lat_new = Lat_prev + deltaT * (V_prev(1) + V_new(1)) * 180.0 / (2 * Ry_h * M_PI);
-    
-    // Longitude update (deg)
-    Lon_new = Lon_prev + deltaT * (V_prev(0) + V_new(0)) * 180.0 / (2 * Rx_h * cosLat * M_PI);
-    
-    // Altitude update (m)
-    h_new = h_prev + deltaT * (V_prev(2) + V_new(2)) / 2.0;
-    
-    // Update Earth curvature radii
-    double sinLat = sin(Lat_new * M_PI/180.0);
-    Rx = Re / (1 - e * sinLat * sinLat);  // Meridian radius
-    Ry = Re / (1 + 2*e - 3*e * sinLat * sinLat);  // Transverse radius
-}
- 
-/**
- * @brief Compute gravity magnitude
- * 
- * @return Gravity magnitude (m/s²)
- */
-double EkfNavigation::computeGravity(double Latitude, double h, const NavigationParams& params) {
-    double sinLat = sin(Latitude * M_PI/180.0);
-    double sin2Lat = sinLat * sinLat;
-    double denominator = sqrt(1 - params.gk2 * sin2Lat);
-    double factor = (1 - 2*h/params.Re) / denominator;
-    return params.g0 * (1 + params.gk1 * sin2Lat) * factor;
-}
-
 // ================== EKF Specific Algorithms ==================
 /**
  * @brief Compute state derivative for continuous-time model
@@ -662,28 +685,6 @@ Eigen::VectorXd EkfNavigation::computeStateDerivative(const Eigen::VectorXd& X,
     fx_nonlinear.segment<3>(3) = (Matrix3d::Identity() - Cnp.transpose()) * fn;
     
     return F_linear * X + fx_nonlinear;
-}
-
-/**
- * @brief Perform Runge-Kutta 4 integration
- * 
- * @return Predicted state
- */
-Eigen::VectorXd EkfNavigation::rungeKutta4(const Eigen::VectorXd& X, 
-                                          const Eigen::MatrixXd& Uparm, 
-                                          double dt) {
-    // Extract parameters for RK4 stages
-    MatrixXd parm_old = Uparm.block<6,3>(0,0);
-    MatrixXd parm_mid = Uparm.block<6,3>(0,3);
-    MatrixXd parm_new = Uparm.block<6,3>(0,6);
-    
-    // RK4 stages
-    VectorXd k1 = computeStateDerivative(X, parm_old);
-    VectorXd k2 = computeStateDerivative(X + 0.5 * dt * k1, parm_mid);
-    VectorXd k3 = computeStateDerivative(X + 0.5 * dt * k2, parm_mid);
-    VectorXd k4 = computeStateDerivative(X + dt * k3, parm_new);
-    
-    return X + dt / 6.0 * (k1 + 2*k2 + 2*k3 + k4);
 }
 
 /*
@@ -882,35 +883,6 @@ Eigen::MatrixXd EkfNavigation::computeJacobian(const Eigen::VectorXd& X,
     MatrixXd result = -Ajac + F_linear;
     
     return result;
-}
-
-
-/**
- * @brief Discretize linear time-invariant system
- */
-void EkfNavigation::ltiDiscretize(const Eigen::MatrixXd& F, 
-                                 const Eigen::MatrixXd& G, 
-                                 const Eigen::MatrixXd& Qc, 
-                                 double dt,
-                                 Eigen::MatrixXd& A, 
-                                 Eigen::MatrixXd& Q) {
-    // Discretize state transition matrix using matrix exponential
-    int n = F.rows();
-    MatrixXd I = MatrixXd::Identity(n, n);
-    A = (F * dt).exp();
-    
-    // Discretize process noise using Van Loan's method
-    MatrixXd Phi = MatrixXd::Zero(2*n, 2*n);
-    Phi.block(0,0,n,n) = F;
-    Phi.block(0,n,n,n) = G * Qc * G.transpose();
-    Phi.block(n,n,n,n) = -F.transpose();
-    
-    MatrixXd G0(2*n, n);
-    G0 << MatrixXd::Zero(n, n), MatrixXd::Identity(n, n);
- 
-    MatrixXd AB = (Phi * dt).exp() * G0;
- 
-    Q = AB.block(0,0,n,n) * AB.block(n,0,n,n).inverse();
 }
  
 /**

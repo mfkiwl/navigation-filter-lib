@@ -73,11 +73,6 @@ public:
     NavigationState& getState() override { return state_; }
     
     /**
-     * @brief Advance to next time step
-     */
-    void advance() override;
-    
-    /**
      * @brief Check if current step is measurement update step
      * 
      * @param i Time index
@@ -120,21 +115,6 @@ private:
     // EKF state
     ExtendedKalmanFilterParams ekf_;   ///< EKF covariance matrices
     Eigen::Vector3d last_f_INSt_;      ///< Previous specific force in nav frame
-    
-    // Strapdown inertial navigation components
-    /**
-     * @brief Update attitude using angular rates
-     * 
-     * @param wtb_b Angular rate of body w.r.t inertial frame
-     */
-    void updateAttitude(const Eigen::Vector3d& wtb_b);
-    
-    /**
-     * @brief Update velocity and position
-     * 
-     * @param f_INSt Specific force in navigation frame
-     */
-    void updateVelocityPosition(const Eigen::Vector3d& f_INSt);
     
     // EKF processing components
     /**

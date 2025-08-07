@@ -64,11 +64,6 @@ public:
     virtual NavigationState& getState() = 0;
     
     /**
-     * @brief Advance to the next time step
-     */
-    virtual void advance() = 0;
-    
-    /**
      * @brief Check if at measurement update step
      * 
      * @param i Current time index

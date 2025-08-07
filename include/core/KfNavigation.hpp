@@ -71,11 +71,6 @@ public:
     NavigationState& getState() override { return state_; }
     
     /**
-     * @brief Advance to next time step in navigation processing
-     */
-    void advance() override;
-    
-    /**
      * @brief Check if current time step requires measurement update
      * 
      * @param i Current time index
@@ -119,36 +114,7 @@ private:
     KalmanFilterParams kalman_;       // Kalman filter covariance matrices
     Eigen::Vector3d last_f_INSt_;     // Previous specific force in navigation frame (for state transition)
     
-    // Strapdown inertial navigation components
-    /**
-     * @brief Update attitude using angular rate measurements
-     * 
-     * @param wtb_b Angular rate of body w.r.t inertial frame (body frame)
-     */
-    void updateAttitude(const Eigen::Vector3d& wtb_b);
-    
-    /**
-     * @brief Update velocity and position using specific force
-     * 
-     * @param f_INSt Specific force in navigation frame
-     */
-    void updateVelocityPosition(const Eigen::Vector3d& f_INSt);
-    
     // Kalman filter processing components
-    /**
-     * @brief Compute state transition matrix for Kalman filter
-     * 
-     * @param i Current time index
-     */
-    void computeStateTransitionMatrix(int i);
-    
-    /**
-     * @brief Compute measurement matrix for Kalman filter
-     * 
-     * @param i Current time index
-     */
-    void computeMeasurementMatrix(int i);
-    
     /**
      * @brief Execute Kalman filter prediction step
      * 

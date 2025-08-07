@@ -77,7 +77,9 @@ void KalmanFilterNavigation::updateStrapdown(const IMUData& imu, int i) {
     // Convert gyro data from deg/h to rad/s and update attitude
     Vector3d wtb_b(imu.gx[i], imu.gy[i], imu.gz[i]);
     wtb_b = wtb_b * (M_PI/3600.0/180.0);  // Convert deg/h to rad/s
-    updateAttitude(wtb_b);
+
+    strapdownAttitudeUpdate(wtb_b, wit_b_, state_.Quaternion, params_.imu_rate, state_.CbtM);
+    state_.CtbM = state_.CbtM.transpose();
     
     // Convert accelerometer data to navigation frame
     Vector3d f_b(imu.ax[i], imu.ay[i], imu.az[i]);
@@ -98,49 +100,18 @@ void KalmanFilterNavigation::updateStrapdown(const IMUData& imu, int i) {
               state_.Velocity[i](0) * tan(lat_i * M_PI/180.0)/(current_Rx_ + state_.Altitude[i]);
     
     // Update velocity and position
-    updateVelocityPosition(last_f_INSt_);
-    
-    // Update total angular rate in body frame
-    Vector3d wit_t = wie_n_ + wet_t_;
-    wit_b_ = state_.CbtM * wit_t;
-    
-    // Compute Euler angles from direction cosine matrix
-    NavigationUtils::calculateEulerAngles(state_.CbtM, state_.Pitch[i+1], state_.Roll[i+1], state_.Yaw[i+1]);
-    
-    // Display progress every 1000 steps
-    if (i % 1000 == 0) {
-        cout << "Processing: " << i << "/" << (state_.Latitude.size() - 1)
-             << " (" << fixed << setprecision(1) 
-             << (static_cast<double>(i)/(state_.Latitude.size()-1)*100) << "%)" << endl;
-    }
-}
-
-/**
- * @brief Update attitude using angular rate measurements
- */
-void KalmanFilterNavigation::updateAttitude(const Vector3d& wtb_b) {
-    strapdownAttitudeUpdate(wtb_b, wit_b_, state_.Quaternion, params_.imu_rate, state_.CbtM);
-    state_.CtbM = state_.CbtM.transpose();
-}
-
-/**
- * @brief Update velocity and position using mechanization equations
- */
-void KalmanFilterNavigation::updateVelocityPosition(const Vector3d& f_INSt) {
-    int i = current_index_;
     Vector3d V_new;
     double Lat_new, Lon_new, h_new, Rx_new, Ry_new;
     
-    // Perform velocity and position update
     strapdownVelocityPositionUpdate(
-        f_INSt, 
+        last_f_INSt_, 
         state_.Velocity[i], 
         state_.Latitude[i], 
         state_.Longitude[i], 
         state_.Altitude[i],
         wie_n_, 
         wet_t_, 
-        computeGravity(state_.Latitude[i], state_.Altitude[i], params_.earth_params),
+        g,
         params_.imu_rate,
         params_.earth_params.Re, 
         params_.earth_params.e,
@@ -161,285 +132,22 @@ void KalmanFilterNavigation::updateVelocityPosition(const Vector3d& f_INSt) {
     state_.Altitude[i+1] = h_new;
     current_Rx_ = Rx_new;
     current_Ry_ = Ry_new;
-}
-
-// ================== State Prediction ==================
-/**
- * @brief Predict navigation state using Kalman filter
- */void KalmanFilterNavigation::predictState(int i) {
-    // Only perform prediction at measurement steps
-    if (isMeasurementStep(i)) {
-        // Compute state transition matrix
-        computeStateTransitionMatrix(i);
-        
-        // Execute Kalman prediction step
-        runKalmanPrediction(i);
-    }
-}
-
-/**
- * @brief Compute state transition matrix for Kalman filter
- */
-void KalmanFilterNavigation::computeStateTransitionMatrix(int i) {
-    kalman_.A = kalmanComputeStateMatrix(
-        state_.Latitude[i+1], 
-        state_.Velocity[i+1], 
-        state_.Altitude[i+1], 
-        current_Rx_, 
-        current_Ry_, 
-        state_.CtbM, 
-        params_.earth_params.W_ie, 
-        last_f_INSt_
-    );
-}
-
-/**
- * @brief Execute Kalman prediction step
- */
-void KalmanFilterNavigation::runKalmanPrediction(int i) {
-    int k = kalman_index_;
     
-    // Compute control matrix mapping sensor biases to state errors
-    MatrixXd B = MatrixXd::Zero(15, 6);
-    B.block<3,3>(0,0) = state_.CtbM;  // Gyro bias to attitude error
-    B.block<3,3>(3,3) = state_.CtbM;  // Accel bias to velocity error
-    
-    // Perform Kalman prediction step
-    VectorXd X_pred;
-    MatrixXd P_pred;
-    kalmanPredictStep(
-        kalman_.X.col(k-1), 
-        kalman_.P,
-        kalman_.A, 
-        B, 
-        kalman_.Q, 
-        kalman_.T,
-        X_pred, 
-        P_pred
-    );
-    
-    // Save predicted state and covariance
-    kalman_.X_pred = X_pred;
-    kalman_.P_pred = P_pred;
-}
-
-// ================== Measurement Update ==================
-/**
- * @brief Update navigation state using GPS measurement
- */
-void KalmanFilterNavigation::updateMeasurement(const GPSData& gps, int i) {
-    // Compute measurement matrix
-    computeMeasurementMatrix(i);
-    
-    // Compute measurement residual (innovation)
-    int k = kalman_index_;
-    int gps_index = static_cast<int>(round(static_cast<double>(i + 1) / measurement_interval_) - 1);
-    if (gps_index >= gps.time.size()) gps_index = gps.time.size() - 1;
-    
-    // Construct measurement vector (velocity and position differences)
-    VectorXd Z(6);
-    Z << state_.Velocity[i+1](0) - gps.vx[gps_index],
-         state_.Velocity[i+1](1) - gps.vy[gps_index],
-         state_.Velocity[i+1](2) - gps.vz[gps_index],
-         (state_.Latitude[i+1] - gps.lat[gps_index]) * M_PI * (current_Ry_ + state_.Altitude[i+1]) / 180.0,
-         (state_.Longitude[i+1] - gps.lon[gps_index]) * M_PI * (current_Rx_ + state_.Altitude[i+1]) * 
-             cos(state_.Latitude[i+1] * M_PI/180.0) / 180.0,
-         state_.Altitude[i+1] - gps.alt[gps_index];
-    
-    // Execute Kalman update
-    runKalmanUpdate(i, Z);
-}
-
-/**
- * @brief Compute measurement matrix for Kalman filter
- */
-void KalmanFilterNavigation::computeMeasurementMatrix(int i) {
-    kalman_.H = kalmanComputeMeasurementMatrix(
-        state_.Roll[i+1], 
-        state_.Yaw[i+1],
-        state_.Pitch[i+1], 
-        state_.Latitude[i+1],
-        state_.Altitude[i+1], 
-        current_Rx_, 
-        current_Ry_
-    );
-}
-
-/**
- * @brief Execute Kalman update step
- */
-void KalmanFilterNavigation::runKalmanUpdate(int i, const VectorXd& Z) {
-    int k = kalman_index_;
-    
-    // Perform Kalman update step
-    VectorXd X_new;
-    MatrixXd P_new;
-    kalmanUpdateStep(
-        kalman_.X_pred, 
-        kalman_.P_pred,
-        Z,
-        kalman_.H, 
-        kalman_.R, 
-        X_new, 
-        P_new
-    );
-    
-    // Save updated state and covariance
-    kalman_.Xsave.col(k) = X_new;
-    kalman_.P = P_new; 
-    kalman_.X.col(k) = X_new;
-    
-    // Record covariance diagonal for analysis
-    for (int j = 0; j < 15; j++) {
-        kalman_.P_mean_square(j, k) = sqrt(P_new(j, j));
-    }
-    
-    // Reset error states for next cycle
-    kalman_.X.block(0,k,9,1).setZero();  // Reset first 9 states
-    
-    // Increment Kalman index for next update
-    kalman_index_++;
-}
-
-// ================== Error Correction ==================
-/**
- * @brief Correct navigation state errors using Kalman estimates
- */
-void KalmanFilterNavigation::correctErrors(int i) {
-    int k = kalman_index_ - 1;
-    VectorXd X_corr = kalman_.Xsave.col(k);  // Correction vector
-    
-    // Correct position and velocity
-    state_.Latitude[i+1] -= X_corr(6) * (180.0/M_PI);   // Latitude correction
-    state_.Longitude[i+1] -= X_corr(7) * (180.0/M_PI);  // Longitude correction
-    state_.Altitude[i+1] -= X_corr(8);                  // Altitude correction
-    state_.Velocity[i+1] -= X_corr.segment(3, 3);       // Velocity correction
-    
-    // Correct attitude using misalignment angles
-    double E_err = X_corr(0) * 180 / M_PI;  // East misalignment (degrees)
-    double N_err = X_corr(1) * 180 / M_PI;  // North misalignment (degrees)
-    double U_err = X_corr(2) * 180 / M_PI;  // Up misalignment (degrees)
-    
-    // Compute correction DCM
-    Matrix3d C_errT = NavigationUtils::bodyToNavigationDCM(E_err, N_err, U_err);
-    Matrix3d C_err = C_errT.transpose();
-    
-    // Apply correction
-    state_.CtbM = C_err * state_.CtbM;
-
-    // Orthogonalize using Gram-Schmidt process
-    Vector3d col0 = state_.CtbM.col(0);
-    Vector3d col1 = state_.CtbM.col(1) - state_.CtbM.col(1).dot(col0) * col0 / col0.squaredNorm();
-    Vector3d col2 = state_.CtbM.col(2) 
-                - state_.CtbM.col(2).dot(col0) * col0 / col0.squaredNorm()
-                - state_.CtbM.col(2).dot(col1) * col1 / col1.squaredNorm();
-    col0.normalize();
-    col1.normalize();
-    col2.normalize();
-    state_.CtbM.col(0) = col0;
-    state_.CtbM.col(1) = col1;
-    state_.CtbM.col(2) = col2;
-
-    state_.CbtM = state_.CtbM.transpose();
-    
-    // Recompute Euler angles after correction
-    NavigationUtils::calculateEulerAngles(state_.CbtM, state_.Pitch[i+1], state_.Roll[i+1], state_.Yaw[i+1]);
-    
-    // Update Earth parameters based on corrected position
-    double sinLat = sin(state_.Latitude[i+1] * M_PI/180.0);
-    current_Rx_ = params_.earth_params.Re / (1 - params_.earth_params.e * sinLat * sinLat);
-    current_Ry_ = params_.earth_params.Re / (1 + 2*params_.earth_params.e - 3*params_.earth_params.e * sinLat * sinLat);
-    wie_n_ << 0, 
-            params_.earth_params.W_ie * cos(state_.Latitude[i+1] * M_PI/180.0),
-            params_.earth_params.W_ie * sin(state_.Latitude[i+1] * M_PI/180.0);
-    wet_t_ << -state_.Velocity[i+1](1)/(current_Ry_ + state_.Altitude[i+1]),
-             state_.Velocity[i+1](0)/(current_Rx_ + state_.Altitude[i+1]),
-             state_.Velocity[i+1](0) * tan(state_.Latitude[i+1] * M_PI/180.0)/(current_Rx_ + state_.Altitude[i+1]);
+    // Update total angular rate in body frame
     Vector3d wit_t = wie_n_ + wet_t_;
     wit_b_ = state_.CbtM * wit_t;
     
-    // Update quaternion from corrected Euler angles
-    state_.Quaternion = NavigationUtils::eulerToQuaternion(state_.Pitch[i+1], state_.Roll[i+1], state_.Yaw[i+1]);
-
-    // ========== Record History for RTS Smoother ==========
-    RtsSmoother::FilterHistory history_item;
+    // Compute Euler angles from direction cosine matrix
+    NavigationUtils::calculateEulerAngles(state_.CbtM, state_.Pitch[i+1], state_.Roll[i+1], state_.Yaw[i+1]);
     
-    // Save filtered state (posterior)
-    history_item.state = kalman_.Xsave.col(k);
-    
-    // Save predicted state (prior)
-    history_item.predicted_state = kalman_.X_pred;
-    
-    // Save filtered covariance (posterior)
-    history_item.covariance = kalman_.P;
-    
-    // Save predicted covariance (prior)
-    history_item.predicted_covariance = kalman_.P_pred;
-    
-    // Save transition matrix
-    history_item.transition_matrix = kalman_.A;
-    
-    // Save current navigation state snapshot
-    history_item.nav_state.Latitude = {state_.Latitude[i+1]};
-    history_item.nav_state.Longitude = {state_.Longitude[i+1]};
-    history_item.nav_state.Altitude = {state_.Altitude[i+1]};
-    history_item.nav_state.Velocity = {state_.Velocity[i+1]};
-    history_item.nav_state.Pitch = {state_.Pitch[i+1]};
-    history_item.nav_state.Roll = {state_.Roll[i+1]};
-    history_item.nav_state.Yaw = {state_.Yaw[i+1]};
-    history_item.nav_state.CbtM = state_.CbtM;
-    history_item.nav_state.CtbM = state_.CtbM;
-    
-    // Add to RTS smoother
-    rts_smoother_.addHistoryItem(history_item);
-}
-
-// ================== Time Management ==================
-/**
- * @brief Advance to next time step
- */
-void KalmanFilterNavigation::advance() {
-    current_index_++;
-}
-
-/**
- * @brief Check if current time step requires measurement update
- * 
- * @return true if measurement update should be performed
- */
-bool KalmanFilterNavigation::isMeasurementStep(int i) const {
-    return (i + 1) % measurement_interval_ == 0;
-}
-
-// ================== Main Run Loop ==================
-/**
- * @brief Execute full navigation processing sequence
- */
-void KalmanFilterNavigation::run(const IMUData& imu, const GPSData& gps) {
-    int NavEnd = imu.index.size() - 1;
-    
-    for (int i = 0; i < NavEnd; i++) {
-        // Strapdown inertial navigation update
-        updateStrapdown(imu, i);
-        
-        // Perform Kalman steps at measurement intervals
-        if (isMeasurementStep(i)) {
-            // State prediction
-            predictState(i);
-            
-            // Measurement update
-            updateMeasurement(gps, i);
-            
-            // Error correction
-            correctErrors(i);
-        }
-        
-        // Advance to next time step
-        advance();
+    // Display progress every 1000 steps
+    if (i % 1000 == 0) {
+        cout << "Processing: " << i << "/" << (state_.Latitude.size() - 1)
+             << " (" << fixed << setprecision(1) 
+             << (static_cast<double>(i)/(state_.Latitude.size()-1)*100) << "%)" << endl;
     }
 }
 
-// ================== Algorithm Implementations ==================
 /**
  * @brief Update attitude using quaternion integration
  * 
@@ -538,6 +246,318 @@ double KalmanFilterNavigation::computeGravity(double Latitude, double h, const N
     return params.g0 * (1 + params.gk1 * sin2Lat) * factor;
 }
 
+// ================== State Prediction ==================
+/**
+ * @brief Predict navigation state using Kalman filter
+ */void KalmanFilterNavigation::predictState(int i) {
+    // Only perform prediction at measurement steps
+    if (isMeasurementStep(i)) {
+        // Compute state transition matrix
+        kalman_.A = kalmanComputeStateMatrix(
+            state_.Latitude[i+1], 
+            state_.Velocity[i+1], 
+            state_.Altitude[i+1], 
+            current_Rx_, 
+            current_Ry_, 
+            state_.CtbM, 
+            params_.earth_params.W_ie, 
+            last_f_INSt_
+        );
+        
+        // Execute Kalman prediction step
+        runKalmanPrediction(i);
+    }
+}
+
+/**
+ * @brief Execute Kalman prediction step
+ */
+void KalmanFilterNavigation::runKalmanPrediction(int i) {
+    int k = kalman_index_;
+    
+    // Compute control matrix mapping sensor biases to state errors
+    MatrixXd B = MatrixXd::Zero(15, 6);
+    B.block<3,3>(0,0) = state_.CtbM;  // Gyro bias to attitude error
+    B.block<3,3>(3,3) = state_.CtbM;  // Accel bias to velocity error
+    
+    // Perform Kalman prediction step
+    VectorXd X_pred;
+    MatrixXd P_pred;
+    kalmanPredictStep(
+        kalman_.X.col(k-1), 
+        kalman_.P,
+        kalman_.A, 
+        B, 
+        kalman_.Q, 
+        kalman_.T,
+        X_pred, 
+        P_pred
+    );
+    
+    // Save predicted state and covariance
+    kalman_.X_pred = X_pred;
+    kalman_.P_pred = P_pred;
+}
+
+/**
+ * @brief Execute Kalman prediction step
+ * 
+ * Implements discrete-time state prediction using Taylor series approximation
+ */
+void KalmanFilterNavigation::kalmanPredictStep(const VectorXd& X_prev,
+                                             const MatrixXd& P_prev,
+                                             const MatrixXd& A,
+                                             const MatrixXd& B,
+                                             const Eigen::MatrixXd& Q,
+                                             double T,
+                                             VectorXd& X_pred,
+                                             MatrixXd& P_pred) {
+    // Compute state transition using Taylor series expansion
+    MatrixXd I = MatrixXd::Identity(A.rows(), A.cols());
+    MatrixXd one_step_tran = I + A * T + (A * A * T * T) / 2.0 + 
+                           (A * A * A * T * T * T) / 6.0 + 
+                           (A * A * A * A * T * T * T * T) / 24.0;
+    
+    // Compute process noise covariance using Taylor series
+    MatrixXd qq1 = B * Q * B.transpose() * T;
+    MatrixXd sys_noise_drive = qq1;
+    for (int kk = 2; kk <= 10; kk++) {
+        MatrixXd qq2 = A * qq1;
+        qq1 = (qq2 + qq2.transpose()) * T / kk;
+        sys_noise_drive += qq1;
+    }
+    
+    // Predict state and covariance
+    P_pred = one_step_tran * P_prev * one_step_tran.transpose() + sys_noise_drive;
+    X_pred = one_step_tran * X_prev;
+}
+
+// ================== Measurement Update ==================
+/**
+ * @brief Update navigation state using GPS measurement
+ */
+void KalmanFilterNavigation::updateMeasurement(const GPSData& gps, int i) {
+    // Compute measurement matrix
+    kalman_.H = kalmanComputeMeasurementMatrix(
+        state_.Roll[i+1], 
+        state_.Yaw[i+1],
+        state_.Pitch[i+1], 
+        state_.Latitude[i+1],
+        state_.Altitude[i+1], 
+        current_Rx_, 
+        current_Ry_
+    );
+    
+    // Compute measurement residual (innovation)
+    int k = kalman_index_;
+    int gps_index = static_cast<int>(round(static_cast<double>(i + 1) / measurement_interval_) - 1);
+    if (gps_index >= gps.time.size()) gps_index = gps.time.size() - 1;
+    
+    // Construct measurement vector (velocity and position differences)
+    VectorXd Z(6);
+    Z << state_.Velocity[i+1](0) - gps.vx[gps_index],
+         state_.Velocity[i+1](1) - gps.vy[gps_index],
+         state_.Velocity[i+1](2) - gps.vz[gps_index],
+         (state_.Latitude[i+1] - gps.lat[gps_index]) * M_PI * (current_Ry_ + state_.Altitude[i+1]) / 180.0,
+         (state_.Longitude[i+1] - gps.lon[gps_index]) * M_PI * (current_Rx_ + state_.Altitude[i+1]) * 
+             cos(state_.Latitude[i+1] * M_PI/180.0) / 180.0,
+         state_.Altitude[i+1] - gps.alt[gps_index];
+    
+    // Execute Kalman update
+    runKalmanUpdate(i, Z);
+}
+
+/**
+ * @brief Execute Kalman update step
+ */
+void KalmanFilterNavigation::runKalmanUpdate(int i, const VectorXd& Z) {
+    int k = kalman_index_;
+    
+    // Perform Kalman update step
+    VectorXd X_new;
+    MatrixXd P_new;
+    kalmanUpdateStep(
+        kalman_.X_pred, 
+        kalman_.P_pred,
+        Z,
+        kalman_.H, 
+        kalman_.R, 
+        X_new, 
+        P_new
+    );
+    
+    // Save updated state and covariance
+    kalman_.Xsave.col(k) = X_new;
+    kalman_.P = P_new; 
+    kalman_.X.col(k) = X_new;
+    
+    // Record covariance diagonal for analysis
+    for (int j = 0; j < 15; j++) {
+        kalman_.P_mean_square(j, k) = sqrt(P_new(j, j));
+    }
+    
+    // Reset error states for next cycle
+    kalman_.X.block(0,k,9,1).setZero();  // Reset first 9 states
+    
+    // Increment Kalman index for next update
+    kalman_index_++;
+}
+
+/**
+ * @brief Execute Kalman update step
+ * 
+ * Implements measurement update using Joseph form for covariance stability
+ */
+void KalmanFilterNavigation::kalmanUpdateStep(const VectorXd& X_pred,
+                                            const MatrixXd& P_pred,
+                                            const VectorXd& Z,
+                                            const MatrixXd& H,
+                                            const MatrixXd& R,
+                                            VectorXd& X_new,
+                                            MatrixXd& P_new) {
+    // Compute innovation covariance
+    MatrixXd S = H * P_pred * H.transpose() + R;
+
+    // Compute Kalman gain
+    MatrixXd K_filter_gain = P_pred * H.transpose() * S.inverse();
+    
+    // Update state estimate
+    X_new = X_pred + K_filter_gain * (Z - H * X_pred);
+
+    // Update covariance (Joseph form for numerical stability)
+    MatrixXd I = MatrixXd::Identity(X_pred.size(), X_pred.size());
+    MatrixXd I_KH = I - K_filter_gain * H;
+    P_new = I_KH * P_pred * I_KH.transpose() + K_filter_gain * R * K_filter_gain.transpose();
+}
+
+// ================== Error Correction ==================
+/**
+ * @brief Correct navigation state errors using Kalman estimates
+ */
+void KalmanFilterNavigation::correctErrors(int i) {
+    int k = kalman_index_ - 1;
+    VectorXd X_corr = kalman_.Xsave.col(k);  // Correction vector
+    
+    // Correct position and velocity
+    state_.Latitude[i+1] -= X_corr(6) * (180.0/M_PI);   // Latitude correction
+    state_.Longitude[i+1] -= X_corr(7) * (180.0/M_PI);  // Longitude correction
+    state_.Altitude[i+1] -= X_corr(8);                  // Altitude correction
+    state_.Velocity[i+1] -= X_corr.segment(3, 3);       // Velocity correction
+    
+    // Correct attitude using misalignment angles
+    double E_err = X_corr(0) * 180 / M_PI;  // East misalignment (degrees)
+    double N_err = X_corr(1) * 180 / M_PI;  // North misalignment (degrees)
+    double U_err = X_corr(2) * 180 / M_PI;  // Up misalignment (degrees)
+    
+    // Compute correction DCM
+    Matrix3d C_errT = NavigationUtils::bodyToNavigationDCM(E_err, N_err, U_err);
+    Matrix3d C_err = C_errT.transpose();
+    
+    // Apply correction
+    state_.CtbM = C_err * state_.CtbM;
+
+    // Orthogonalize using Gram-Schmidt process
+    Vector3d col0 = state_.CtbM.col(0);
+    Vector3d col1 = state_.CtbM.col(1) - state_.CtbM.col(1).dot(col0) * col0 / col0.squaredNorm();
+    Vector3d col2 = state_.CtbM.col(2) 
+                - state_.CtbM.col(2).dot(col0) * col0 / col0.squaredNorm()
+                - state_.CtbM.col(2).dot(col1) * col1 / col1.squaredNorm();
+    col0.normalize();
+    col1.normalize();
+    col2.normalize();
+    state_.CtbM.col(0) = col0;
+    state_.CtbM.col(1) = col1;
+    state_.CtbM.col(2) = col2;
+
+    state_.CbtM = state_.CtbM.transpose();
+    
+    // Recompute Euler angles after correction
+    NavigationUtils::calculateEulerAngles(state_.CbtM, state_.Pitch[i+1], state_.Roll[i+1], state_.Yaw[i+1]);
+    
+    // Update Earth parameters based on corrected position
+    double sinLat = sin(state_.Latitude[i+1] * M_PI/180.0);
+    current_Rx_ = params_.earth_params.Re / (1 - params_.earth_params.e * sinLat * sinLat);
+    current_Ry_ = params_.earth_params.Re / (1 + 2*params_.earth_params.e - 3*params_.earth_params.e * sinLat * sinLat);
+    wie_n_ << 0, 
+            params_.earth_params.W_ie * cos(state_.Latitude[i+1] * M_PI/180.0),
+            params_.earth_params.W_ie * sin(state_.Latitude[i+1] * M_PI/180.0);
+    wet_t_ << -state_.Velocity[i+1](1)/(current_Ry_ + state_.Altitude[i+1]),
+             state_.Velocity[i+1](0)/(current_Rx_ + state_.Altitude[i+1]),
+             state_.Velocity[i+1](0) * tan(state_.Latitude[i+1] * M_PI/180.0)/(current_Rx_ + state_.Altitude[i+1]);
+    Vector3d wit_t = wie_n_ + wet_t_;
+    wit_b_ = state_.CbtM * wit_t;
+    
+    // Update quaternion from corrected Euler angles
+    state_.Quaternion = NavigationUtils::eulerToQuaternion(state_.Pitch[i+1], state_.Roll[i+1], state_.Yaw[i+1]);
+
+    // ========== Record History for RTS Smoother ==========
+    RtsSmoother::FilterHistory history_item;
+    
+    // Save filtered state (posterior)
+    history_item.state = kalman_.Xsave.col(k);
+    
+    // Save predicted state (prior)
+    history_item.predicted_state = kalman_.X_pred;
+    
+    // Save filtered covariance (posterior)
+    history_item.covariance = kalman_.P;
+    
+    // Save predicted covariance (prior)
+    history_item.predicted_covariance = kalman_.P_pred;
+    
+    // Save transition matrix
+    history_item.transition_matrix = kalman_.A;
+    
+    // Save current navigation state snapshot
+    history_item.nav_state.Latitude = {state_.Latitude[i+1]};
+    history_item.nav_state.Longitude = {state_.Longitude[i+1]};
+    history_item.nav_state.Altitude = {state_.Altitude[i+1]};
+    history_item.nav_state.Velocity = {state_.Velocity[i+1]};
+    history_item.nav_state.Pitch = {state_.Pitch[i+1]};
+    history_item.nav_state.Roll = {state_.Roll[i+1]};
+    history_item.nav_state.Yaw = {state_.Yaw[i+1]};
+    history_item.nav_state.CbtM = state_.CbtM;
+    history_item.nav_state.CtbM = state_.CtbM;
+    
+    // Add to RTS smoother
+    rts_smoother_.addHistoryItem(history_item);
+}
+
+// ================== Main Run Loop ==================
+/**
+ * @brief Check if current time step requires measurement update
+ * 
+ * @return true if measurement update should be performed
+ */
+bool KalmanFilterNavigation::isMeasurementStep(int i) const {
+    return (i + 1) % measurement_interval_ == 0;
+}
+
+/**
+ * @brief Execute full navigation processing sequence
+ */
+void KalmanFilterNavigation::run(const IMUData& imu, const GPSData& gps) {
+    int NavEnd = imu.index.size() - 1;
+    
+    for (int i = 0; i < NavEnd; i++) {
+        // Strapdown inertial navigation update
+        updateStrapdown(imu, i);
+        
+        // Perform Kalman steps at measurement intervals
+        if (isMeasurementStep(i)) {
+            // State prediction
+            predictState(i);
+            
+            // Measurement update
+            updateMeasurement(gps, i);
+            
+            // Error correction
+            correctErrors(i);
+        }
+    }
+}
+
+// ================== Algorithm Implementations ==================
 /**
  * @brief Compute Kalman state transition matrix
  * 
@@ -677,64 +697,4 @@ MatrixXd KalmanFilterNavigation::kalmanComputeMeasurementMatrix(double roll,
     H.block<3,3>(3,6) = H_m1;
     
     return H;
-}
-
-/**
- * @brief Execute Kalman prediction step
- * 
- * Implements discrete-time state prediction using Taylor series approximation
- */
-void KalmanFilterNavigation::kalmanPredictStep(const VectorXd& X_prev,
-                                             const MatrixXd& P_prev,
-                                             const MatrixXd& A,
-                                             const MatrixXd& B,
-                                             const Eigen::MatrixXd& Q,
-                                             double T,
-                                             VectorXd& X_pred,
-                                             MatrixXd& P_pred) {
-    // Compute state transition using Taylor series expansion
-    MatrixXd I = MatrixXd::Identity(A.rows(), A.cols());
-    MatrixXd one_step_tran = I + A * T + (A * A * T * T) / 2.0 + 
-                           (A * A * A * T * T * T) / 6.0 + 
-                           (A * A * A * A * T * T * T * T) / 24.0;
-    
-    // Compute process noise covariance using Taylor series
-    MatrixXd qq1 = B * Q * B.transpose() * T;
-    MatrixXd sys_noise_drive = qq1;
-    for (int kk = 2; kk <= 10; kk++) {
-        MatrixXd qq2 = A * qq1;
-        qq1 = (qq2 + qq2.transpose()) * T / kk;
-        sys_noise_drive += qq1;
-    }
-    
-    // Predict state and covariance
-    P_pred = one_step_tran * P_prev * one_step_tran.transpose() + sys_noise_drive;
-    X_pred = one_step_tran * X_prev;
-}
-
-/**
- * @brief Execute Kalman update step
- * 
- * Implements measurement update using Joseph form for covariance stability
- */
-void KalmanFilterNavigation::kalmanUpdateStep(const VectorXd& X_pred,
-                                            const MatrixXd& P_pred,
-                                            const VectorXd& Z,
-                                            const MatrixXd& H,
-                                            const MatrixXd& R,
-                                            VectorXd& X_new,
-                                            MatrixXd& P_new) {
-    // Compute innovation covariance
-    MatrixXd S = H * P_pred * H.transpose() + R;
-
-    // Compute Kalman gain
-    MatrixXd K_filter_gain = P_pred * H.transpose() * S.inverse();
-    
-    // Update state estimate
-    X_new = X_pred + K_filter_gain * (Z - H * X_pred);
-
-    // Update covariance (Joseph form for numerical stability)
-    MatrixXd I = MatrixXd::Identity(X_pred.size(), X_pred.size());
-    MatrixXd I_KH = I - K_filter_gain * H;
-    P_new = I_KH * P_pred * I_KH.transpose() + K_filter_gain * R * K_filter_gain.transpose();
 }
