@@ -7,8 +7,8 @@
  *
  * @author peanut-nav
  * @date Created: 2025-07-22
- * @last Modified: 2025-07-22
- * @version 0.1
+ * @last Modified: 2025-08-10
+ * @version 0.3.3
  */
 
 #pragma once
@@ -23,6 +23,11 @@ namespace NavigationUtils {
 constexpr double DEG_TO_RAD = M_PI / 180.0;
 
 /**
+ * @brief Radians to degrees conversion constant
+ */
+constexpr double RAD_TO_DEG = 180.0 / M_PI;
+
+/**
  * @brief Convert degrees to radians
  * @tparam T Numeric type (float/double)
  * @param deg Angle in degrees
@@ -31,6 +36,17 @@ constexpr double DEG_TO_RAD = M_PI / 180.0;
 template <typename T>
 T deg2rad(T deg) {
     return deg * static_cast<T>(DEG_TO_RAD);
+}
+
+/**
+ * @brief Convert radians to degrees
+ * @tparam T Numeric type (float/double)
+ * @param rad Angle in radians
+ * @return Angle in degrees
+ */
+template <typename T>
+T rad2deg(T rad) {
+    return rad * static_cast<T>(RAD_TO_DEG);
 }
 
 /**
@@ -173,6 +189,44 @@ inline void calculateEulerAngles(const Eigen::Matrix3d& CbtM,
         } else {
             yaw = 270.0;
         }
+    }
+}
+
+/**
+ * @brief Calculate Euler angles from a direction cosine matrix (navigation to body frame)
+ * 
+ * @param Cnb Direction cosine matrix from navigation to body frame
+ * @param yaw Yaw angle (radians) (output)
+ * @param pitch Pitch angle (radians) (output)
+ * @param roll Roll angle (radians) (output)
+ */
+inline void attitudeFromCnb(const Eigen::Matrix3d& Cnb,
+                           double& yaw,
+                           double& pitch,
+                           double& roll) {
+    // Calculate pitch angle (θ)
+    pitch = std::asin(Cnb(1, 2));
+    
+    // Calculate roll angle (γ)
+    roll = std::atan2(-Cnb(0, 2), Cnb(2, 2));
+    
+    // Calculate yaw angle (ψ)
+    yaw = std::atan2(-Cnb(1, 0), Cnb(1, 1));
+    
+    // Adjust roll angle quadrant based on Cnb(2,2) (equivalent to Cnb(3,3) in MATLAB)
+    if (Cnb(2, 2) < 0) {
+        if (roll < 0) {
+            roll += M_PI;
+        } else {
+            roll -= M_PI;
+        }
+    }
+    
+    // Adjust yaw angle quadrant based on Cnb(1,1) (equivalent to Cnb(2,2) in MATLAB)
+    if (Cnb(1, 1) < 0) {
+        yaw += M_PI;
+    } else if (Cnb(1, 1) > 0 && yaw < 0) {
+        yaw += 2 * M_PI;
     }
 }
 

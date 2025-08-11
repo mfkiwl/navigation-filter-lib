@@ -25,7 +25,6 @@ struct ExtendedKalmanFilterParams {
     // Noise matrices
     Eigen::MatrixXd R;  ///< Measurement noise covariance matrix
     Eigen::MatrixXd Q;  ///< Process noise covariance matrix (continuous time)
-    
     // Covariance matrix
     Eigen::MatrixXd P;  ///< State estimation error covariance matrix
     
@@ -38,9 +37,9 @@ struct ExtendedKalmanFilterParams {
     Eigen::MatrixXd P_pred;  ///< Predicted covariance matrix
     
     // Measurement matrix
-    Eigen::MatrixXd H;       ///< Measurement matrix (Hz in MATLAB)
+    Eigen::MatrixXd H;       ///< Measurement matrix
     
-    // Discrete system matrices (from MATLAB)
+    // Discrete system matrices
     Eigen::MatrixXd A;    ///< state transition matrix
     Eigen::MatrixXd disA;    ///< Discrete state transition matrix
     Eigen::MatrixXd disQ;    ///< Discrete process noise covariance

@@ -11,7 +11,6 @@
 #pragma once
 #include "ISystemInitializer.hpp"
 #include "../params/EkfParams.hpp"
-#include "MathUtils.hpp"
 
 class EkfInitializer : public ISystemInitializer {
 public:

@@ -14,10 +14,16 @@
 
 #include "params/KfParams.hpp"
 #include "params/EkfParams.hpp"
+#include "params/UkfParams.hpp"
+
 #include "initializers/KfInitializer.hpp"
 #include "initializers/EkfInitializer.hpp"
+#include "initializers/UkfInitializer.hpp"
+
 #include "core/KfNavigation.hpp"
 #include "core/EkfNavigation.hpp"
+#include "core/UkfNavigation.hpp"
+
 #include <memory>
 #include <stdexcept>
 
@@ -27,7 +33,7 @@
 enum class FilterType {
     KF,   ///< Kalman Filter
     EKF,  ///< Extended Kalman Filter
-    UKF   ///< Unscented Kalman Filter (reserved)
+    UKF   ///< Unscented Kalman Filter
 };
 
 /**
@@ -61,6 +67,12 @@ public:
                 params->gps_rate = GPSrate;
                 return params;
             }
+            case FilterType::UKF: {
+                auto params = std::make_unique<UkfParams>();
+                params->imu_rate = IMUrate;
+                params->gps_rate = GPSrate;
+                return params;
+            }
             default:
                 throw std::runtime_error("Unsupported filter type");
         }
@@ -86,6 +98,8 @@ public:
                 return std::make_unique<KfInitializer>(IMUrate, GPSrate, simTime);
             case FilterType::EKF:
                 return std::make_unique<EkfInitializer>(IMUrate, GPSrate, simTime);
+            case FilterType::UKF:
+                return std::make_unique<UkfInitializer>(IMUrate, GPSrate, simTime);
             default:
                 throw std::runtime_error("Unsupported filter type");
         }
@@ -103,6 +117,8 @@ public:
                 return std::make_unique<KalmanFilterNavigation>();
             case FilterType::EKF:
                 return std::make_unique<EkfNavigation>();
+            case FilterType::UKF:
+                return std::make_unique<UkfNavigation>();
             default:
                 throw std::runtime_error("Unsupported filter type");
         }

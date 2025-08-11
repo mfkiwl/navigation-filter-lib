@@ -4,8 +4,8 @@
 # including core math utilities, data loading, and navigation algorithms.
 #
 # @author peanut-nav
-# @date Created: 2025-08-04
-# @version 0.3.0
+# @date Created: 2025-08-11
+# @version 0.3.3
 
 # Minimum required CMake version
 cmake_minimum_required(VERSION 3.15)
@@ -32,9 +32,9 @@ find_package(Eigen3 3.3 REQUIRED)    # Required for matrix and vector operations
 
 # Set project include directories
 include_directories(
-    include         # Main include directory for project headers
-    include/params  # Navigation parameters headers
-    ${EIGEN3_INCLUDE_DIR}  # Eigen include directory
+    include             # Main include directory for project headers (covers include/core, include/params, include/ukf, include/initializers)
+    include/params
+    ${EIGEN3_INCLUDE_DIR}  # Eigen include directory (note: modern usage is Eigen3::Eigen target)
 )
 
 # MathUtils library (interface target for mathematical utilities)
@@ -51,6 +51,7 @@ target_include_directories(DataLoader PUBLIC include)
 add_library(SystemInitializer 
     src/initializers/KfInitializer.cpp
     src/initializers/EkfInitializer.cpp
+    src/initializers/UkfInitializer.cpp       # <-- added UKF initializer
 )
 target_link_libraries(SystemInitializer MathUtils DataLoader)
 target_include_directories(SystemInitializer 
@@ -64,6 +65,7 @@ target_include_directories(SystemInitializer
 add_library(NavigationAlgorithms 
     src/core/KfNavigation.cpp
     src/core/EkfNavigation.cpp
+    src/core/UkfNavigation.cpp                # <-- added UKF navigation
     src/core/RtsSmoother.cpp
 )
 target_link_libraries(NavigationAlgorithms 
@@ -111,6 +113,20 @@ set_target_properties(IntegratedNavigationEKF PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
 )
 
+# UKF
+add_executable(IntegratedNavigationUKF 
+    src/main_ukf.cpp
+)
+target_link_libraries(IntegratedNavigationUKF 
+    DataLoader 
+    SystemInitializer 
+    NavigationAlgorithms 
+    SaveResults
+)
+set_target_properties(IntegratedNavigationUKF PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+)
+
 # Print configuration summary
 message(STATUS "=============================================")
 message(STATUS "Navigation Filter Library Configuration Summary")
@@ -123,9 +139,10 @@ message(STATUS "  Libraries: ")
 message(STATUS "    - MathUtils")
 message(STATUS "    - DataLoader")
 message(STATUS "    - SystemInitializer")
-message(STATUS "    - NavigationAlgorithms (KF and EKF)")
+message(STATUS "    - NavigationAlgorithms (KF, EKF, UKF)")
 message(STATUS "    - SaveResults")
 message(STATUS "  Executables: ")
 message(STATUS "    - IntegratedNavigationKF")
 message(STATUS "    - IntegratedNavigationEKF")
+message(STATUS "    - IntegratedNavigationUKF")
 message(STATUS "=============================================")

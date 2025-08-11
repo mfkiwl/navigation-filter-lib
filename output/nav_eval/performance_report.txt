@@ -6,42 +6,60 @@ Algorithm    Latitude (m) Longitude (m) Altitude (m)
 ----------------------------------------------------
 KF           0.046104   0.245085    0.067023
 EKF          0.045025   0.048222    0.014661
+UKF          0.042458   0.047164    0.014742
 EKF+RTS      0.012959   0.019882    0.006577
+UKF+RTS      0.012936   0.019751    0.006214
 
 [Attitude Errors (degrees)]
 Algorithm    Yaw         Pitch       Roll
 ----------------------------------------------------
 KF           0.002833   0.000083  0.000519
 EKF          0.002178   0.000080  0.000523
+UKF          0.002175   0.000085  0.000523
 EKF+RTS      0.001972   0.000263  0.000568
+UKF+RTS      0.001985   0.000257  0.000567
 
 ===== Performance Improvement Metrics =====
-Metric       KF→EKF (%)   KF→EKF+RTS (%)   EKF→EKF+RTS (%)
-----------------------------------------------------------------
-Latitude         2.3         71.9            71.2
-Longitude       80.3         91.9            58.8
-Altitude        78.1         90.2            55.1
-Yaw             23.1         30.4             9.5
-Pitch            3.6       -216.9          -228.7
-Roll            -0.8         -9.4            -8.6
+Metric          KF→EKF   KF→UKF  KF→EKF+RTS  KF→UKF+RTS  EKF→EKF+RTS  UKF→UKF+RTS
+-----------------------------------------------------------------------------------
+Latitude            2.3      7.9       71.9        71.9         71.2          69.5
+Longitude          80.3     80.8       91.9        91.9         58.8          58.1
+Altitude           78.1     78.0       90.2        90.7         55.1          57.8
+Yaw                23.1     23.2       30.4        29.9          9.5           8.7
+Pitch               3.6     -2.4   -216.9    -209.6     -228.7      -202.4
+Roll               -0.8     -0.8     -9.4       -9.2        -8.6         -8.4
 
 ===== Key Observations =====
 1. EKF vs KF:
    - Longitude error reduced by 80.3% (from 0.245m to 0.048m)
    - Altitude error reduced by 78.1% (from 0.067m to 0.015m)
 
-2. EKF+RTS vs KF:
+2. UKF vs KF:
+   - Longitude error reduced by 80.8% (from 0.245m to 0.047m)
+   - Altitude error reduced by 78.0% (from 0.067m to 0.015m)
+
+3. EKF+RTS vs KF:
    - Latitude error reduced by 71.9% (from 0.046m to 0.013m)
    - Longitude error reduced by 91.9% (from 0.245m to 0.020m)
    - Altitude error reduced by 90.2% (from 0.067m to 0.007m)
 
-3. EKF+RTS vs EKF:
+4. UKF+RTS vs KF:
+   - Latitude error reduced by 71.9% (from 0.046m to 0.013m)
+   - Longitude error reduced by 91.9% (from 0.245m to 0.020m)
+   - Altitude error reduced by 90.7% (from 0.067m to 0.006m)
+
+5. EKF+RTS vs EKF:
    - Latitude error reduced by 71.2% (from 0.045m to 0.013m)
    - Altitude error reduced by 55.1% (from 0.015m to 0.007m)
    - Pitch error increased by 228.7% (from 0.000080° to 0.000263°)
 
-4. Overall Performance Assessment:
-   - EKF+RTS achieves centimeter-level accuracy in all position metrics
-   - Most significant improvement observed in longitude error (KF: 0.245m → EKF+RTS: 0.020m)
-   - Yaw estimation shows consistent improvement through algorithmic enhancements
-   - Pitch metric shows minor regression in EKF+RTS due to smoothing trade-offs
+6. UKF+RTS vs UKF:
+   - Latitude error reduced by 69.5% (from 0.042m to 0.013m)
+   - Altitude error reduced by 57.8% (from 0.015m to 0.006m)
+   - Pitch error increased by 202.4% (from 0.000085° to 0.000257°)
+
+7. Overall Performance Assessment:
+   - Both EKF+RTS and UKF+RTS achieve centimeter-level accuracy in all position metrics.
+   - The largest relative gains remain on longitude error (e.g., KF: 0.245m → EKF+RTS: 0.020m / UKF+RTS: 0.020m).
+   - Yaw estimation improves after smoothing for both EKF and UKF.
+   - Pitch shows a minor regression after smoothing for both EKF and UKF, a known trade-off of RTS smoothing.
