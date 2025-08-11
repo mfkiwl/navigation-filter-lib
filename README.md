@@ -1,6 +1,6 @@
 # Navigation Filter Library
 
-*A modular C++ framework for strap‑down INS + GNSS loosely‑coupled integration, now featuring both linear **Kalman Filter (KF)**, **Extended Kalman Filter (EKF)** and optional **Rauch‑Tung‑Striebel (RTS) smoother**.*
+*A modular C++ framework for strap-down INS + GNSS, implementing **error-state** KF / EKF / UKF (ESKF / ESUKF) with optional RTS smoothing.*
 
 ---
 
@@ -8,8 +8,8 @@
 
 | Category            | Details                                                                                                                         |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| **Algorithms**      | Strap‑down mechanisation · 15‑state linear KF · 15‑state EKF · RTS smoothing · Somigliana gravity model                         |
-| **Modularity**      | Header‑only math helpers · pluggable **Initializers** · interchangeable KF/EKF **Navigation cores** · optional RTS **Smoother** |
+| **Algorithms**      | Strap‑down mechanisation · 15-state **error-state** KF / EKF / UKF (ESKF/ESUKF) · RTS smoother · Somigliana gravity model                         |
+| **Modularity**      | Header‑only math helpers · pluggable **Initializers** · interchangeable KF/EKF/UKF **Navigation cores** · optional RTS **Smoother** |
 | **Tooling**         | CMake ≥ 3.15 · Single dependency: Eigen3 · Python 3 visualiser (`scripts/nav_visualizer.py`)                                    |
 | **Reproducibility** | Synthetic IMU + GPS dataset with fixed seeds ✔️                                                                                 |
 
@@ -22,12 +22,12 @@
 ├── CMakeLists.txt         # Top‑level build script
 ├── include/               # Public C++ headers
 │   ├── core/              # NavigationCore + RTS smoother APIs
-│   ├── initializers/      # System initialisation helpers (KF & EKF)
+│   ├── initializers/      # System initialisation helpers (KF EKF UKF)
 │   ├── params/            # Strong‑typed parameter structs
 │   └── MathUtils.hpp      # Common math utilities
 ├── src/                   # Library & application sources
-│   ├── core/              # KF / EKF / RTS implementations
-│   ├── initializers/      # KF & EKF specific initialisers
+│   ├── core/              # KF / EKF / UKF / RTS implementations
+│   ├── initializers/      # KF  EKF UKF specific initialisers
 │   └── main_{kf,ekf}.cpp  # Demo executables
 ├── data/                  # Deterministic sensor & ground‑truth data
 ├── scripts/               # Plotting & analysis helpers
@@ -64,8 +64,9 @@ Two demo executables are produced in **build/bin/**:
 
 | Executable                | Description                                    |
 | ------------------------- | ---------------------------------------------- |
-| `IntegratedNavigationKF`  | Classic 15‑state linear Kalman filter          |
-| `IntegratedNavigationEKF` | 15‑state Extended Kalman filter & RTS smoother |
+| `IntegratedNavigationKF`  | 15-state **error-state** linear Kalman filter + RTS         |
+| `IntegratedNavigationEKF` | 15-state **error-state** Extended Kalman filter + RTS |
+| `IntegratedNavigationUKF` | 15-state **error-state** Unscented Kalman filter + RTS |
 
 Example run (EKF + RTS):
 

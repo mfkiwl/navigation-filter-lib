@@ -1,6 +1,8 @@
 /**
  * @file UkfParams.hpp
- * @brief Parameters for Unscented Kalman Filter based navigation
+ * @brief Parameters for Unscented Kalman Filter (UKF) based navigation system
+ * 
+ * Defines data structures for UKF parameters, state vectors, and covariance matrices.
  * 
  * @author peanut-nav
  * @date Created: 2025-08-10
@@ -13,53 +15,53 @@
 #include <Eigen/Dense>
 
 /**
- * @brief UKF-specific parameters and state
+ * @brief Parameters and state variables for Unscented Kalman Filter
  */
 struct UnscentedKalmanFilterParams {
-    // Kalman filter parameters
-    int Nk = 15;            // 状态维度
-    int Lk = 6;             // 噪声维度（陀螺+加计）
-    int Mk = 6;             // 量测维度（Vx,Vy,Vz,lat,lon,h）
-    int N  = 0;             // IMU/GPS 步比
-    int M  = 0;             // 卡尔曼点个数
-    double T = 0.0;         // 量测周期
-    int N_kalman = 2;    ///< Update counter
+    // Kalman filter dimensions
+    int Nk = 15;            ///< State vector dimension (attitude(3) + velocity(3) + position(3) + biases(6))
+    int Lk = 6;             ///< Process noise dimension (gyro(3) + accelerometer(3))
+    int Mk = 6;             ///< Measurement dimension (velocity(3) + position(3))
+    int N  = 0;             ///< IMU/GPS update ratio (IMU_steps / GPS_steps)
+    int M  = 0;             ///< Number of Kalman states (buffer size)
+    double T = 0.0;         ///< Measurement update period [s]
+    int N_kalman = 2;       ///< Kalman update counter
 
-    // UKF 权重
-    double lambda = 0.0;          // = 3 - Nk
-    Eigen::VectorXd w;            // 2Nk+1
-    
-    // 协方差/噪声
-    Eigen::MatrixXd P;            // 15x15
-    Eigen::MatrixXd R;            // 6x6
-    Eigen::MatrixXd Q0;           // 6x6 连续噪声（陀螺/加计）
-    Eigen::MatrixXd Q;            // 15x15 离散噪声（按系列展开求）
-    
-    // State and measurement vectors
-    Eigen::MatrixXd X;  ///< State vector
-    Eigen::MatrixXd Z;  ///< Measurement vector
+    // UKF sigma point weights
+    double lambda = 0.0;    ///< Scaling parameter (3 - Nk)
+    Eigen::VectorXd w;      ///< Weight vector (length: 2Nk+1)
+
+    // Covariance matrices
+    Eigen::MatrixXd P;      ///< State error covariance (15x15)
+    Eigen::MatrixXd R;      ///< Measurement noise covariance (6x6)
+    Eigen::MatrixXd Q0;     ///< Continuous process noise covariance (6x6)
+    Eigen::MatrixXd Q;      ///< Discrete process noise covariance (15x15)
+
+    // State and measurement
+    Eigen::MatrixXd X;      ///< State vector matrix (15xM)
+    Eigen::MatrixXd Z;      ///< Measurement vector matrix (6xM)
 
     // Prediction states
-    Eigen::VectorXd X_pred;  ///< Predicted state vector
-    Eigen::MatrixXd P_pred;  ///< Predicted covariance matrix
-    Eigen::MatrixXd X_prop;   // Nk x (2Nk+1)  传播后的 σ 点
+    Eigen::VectorXd X_pred; ///< Predicted state vector (15x1)
+    Eigen::MatrixXd P_pred; ///< Predicted covariance matrix (15x15)
+    Eigen::MatrixXd X_prop; ///< Propagated sigma points (Nk x (2Nk+1))
 
-    // 端点平均所需的上一次 f0
-    Eigen::Matrix<double,15,15> f0;
+    // UKF intermediate matrices
+    Eigen::Matrix<double,15,15> f0;  ///< Previous state function for endpoint averaging
+    Eigen::MatrixXd Hz;              ///< Measurement matrix (6x15)
+    Eigen::MatrixXd Fai;             ///< State transition matrix (Φ, 15x15)
+    Eigen::MatrixXd Gf;              ///< Noise propagation matrix (for RTS smoothing)
 
-    Eigen::MatrixXd Hz;           // 6x15
-
-    Eigen::MatrixXd Fai;          // 15x15 (Φ)
-    Eigen::MatrixXd Gf;           // 15x15 (记录到RTS)
-    
     // Result storage
-    Eigen::MatrixXd Xsave;             ///< Saved state estimates
-    Eigen::MatrixXd P_mean_square;     ///< Mean square covariance
+    Eigen::MatrixXd Xsave;           ///< Saved state estimates (15xM)
+    Eigen::MatrixXd P_mean_square;   ///< Mean square covariance (15xM)
 };
 
 /**
- * @brief Unscented Kalman Filter specific parameters
+ * @brief UKF-specific navigation parameters
+ * 
+ * Extends base navigation parameters with UKF-specific configuration
  */
 struct UkfParams : public NavParamsBase {
-    UnscentedKalmanFilterParams ukf_params; ///< UKF-specific parameters
+    UnscentedKalmanFilterParams ukf_params; ///< UKF-specific parameters and state
 };
