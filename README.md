@@ -151,8 +151,7 @@ Legacy Google Test suites live in **tests\_old/**. They are **deprecated** but 
 
 ## 🗺️ Roadmap
 
-* ✅ v0.3 – EKF core & RTS smoother
-* 🔜 UKF/DD2/...
+* ✅ v0.4 – error-state KF/EKF/UKF core & RTS smoother
 * 🔜 Multi‑sensor fusion (magnetometer, …)
 * 🔜 Real‑time ROS node
 
