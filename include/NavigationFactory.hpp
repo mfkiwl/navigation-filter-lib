@@ -6,8 +6,8 @@
  *
  * @author peanut-nav
  * @date Created: 2025-07-22
- * @last Modified: 2025-08-11
- * @version 0.3.3
+ * @last Modified: 2025-08-20
+ * @version 0.4.0
  */
 
 #pragma once
@@ -24,17 +24,9 @@
 #include "core/EkfNavigation.hpp"
 #include "core/UkfNavigation.hpp"
 
+#include "FilterType.hpp"
 #include <memory>
 #include <stdexcept>
-
-/**
- * @brief Filter type enumeration
- */
-enum class FilterType {
-    KF,   ///< Kalman Filter
-    EKF,  ///< Extended Kalman Filter
-    UKF   ///< Unscented Kalman Filter
-};
 
 /**
  * @brief Navigation system factory

@@ -9,8 +9,8 @@
  *
  * @author peanut-nav
  * @date Created: 2025-08-04
- * @last Modified: 2025-08-04
- * @version 0.3.0
+ * @last Modified: 2025-08-20
+ * @version 0.4.0
  */
 
 #include "core/RtsSmoother.hpp"
@@ -40,7 +40,7 @@ void RtsSmoother::addHistoryItem(const FilterHistory& history_item) {
  * @param process_noise Process noise matrix (Q)
  * @return Structure containing smoothed states and covariances
  */
-RtsSmoother::SmoothResult RtsSmoother::smooth(const Eigen::MatrixXd& process_noise) {
+RtsSmoother::SmoothResult RtsSmoother::smooth(const Eigen::MatrixXd& process_noise, FilterType filterType) {
     int n = history_.size();
     SmoothResult result;
     
@@ -62,9 +62,24 @@ RtsSmoother::SmoothResult RtsSmoother::smooth(const Eigen::MatrixXd& process_noi
     // Backward pass: process from second last point to first
     for (int i = n-2; i >= 0; --i) {
         // Compute smoothing gain
-        MatrixXd Ks = history_[i].covariance * 
+        MatrixXd Ks;
+        switch (filterType) {
+            case FilterType::KF:
+                Ks = history_[i].covariance * 
                      history_[i].transition_matrix.transpose() * 
                      history_[i+1].predicted_covariance.inverse();
+                break;
+            case FilterType::EKF:
+                Ks = history_[i].covariance * 
+                     history_[i].transition_matrix.transpose() * 
+                     history_[i+1].predicted_covariance.inverse();
+                break;
+            case FilterType::UKF:
+                Ks = history_[i+1].cross_covariance * history_[i+1].predicted_covariance.inverse();
+                break;
+            default:
+                break;
+        }
         
         // State smoothing: blend current filter with future smoothed state
         VectorXd state_diff = result.smoothed_states[i+1] - history_[i+1].predicted_state;

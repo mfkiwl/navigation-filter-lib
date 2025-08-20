@@ -6,8 +6,8 @@
  * 
  * @author peanut-nav
  * @date Created: 2025-08-10
- * @last Modified: 2025-08-10
- * @version 0.3.3
+ * @last Modified: 2025-08-20
+ * @version 0.4.0
  */
 
 #pragma once
@@ -49,7 +49,7 @@ struct UnscentedKalmanFilterParams {
     // UKF intermediate matrices
     Eigen::Matrix<double,15,15> f0;  ///< Previous state function for endpoint averaging
     Eigen::MatrixXd Hz;              ///< Measurement matrix (6x15)
-    Eigen::MatrixXd Fai;             ///< State transition matrix (Φ, 15x15)
+    Eigen::MatrixXd P_cross;             ///< cross covariance
     Eigen::MatrixXd Gf;              ///< Noise propagation matrix (for RTS smoothing)
 
     // Result storage

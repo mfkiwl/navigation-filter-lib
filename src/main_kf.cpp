@@ -173,7 +173,7 @@ int main() {
     }
     
     // Execute smoothing
-    RtsSmoother::SmoothResult smooth_result = rts_smoother.smooth(Q);
+    RtsSmoother::SmoothResult smooth_result = rts_smoother.smooth(Q, filterType);
 
     // Generate refined navigation solution using smoothing corrections
     NavigationState smoothed_state = rts_smoother.postProcessNavigation(

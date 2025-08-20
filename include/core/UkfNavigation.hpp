@@ -7,20 +7,10 @@
  * position updates in a local navigation frame, UKF time/measurement updates,
  * and an optional Rauch–Tung–Striebel (RTS) smoother for backward smoothing.
  *
- * Pipeline
- * --------
- * 1) `initialize()` — set up parameters, state, and covariances.
- * 2) `updateStrapdown()` — mechanize attitude/velocity/position from IMU.
- * 3) `predictState()` — UKF time update (propagate state and covariance).
- * 4) `isMeasurementStep()` — check if a GNSS update is due.
- * 5) `updateMeasurement()` — UKF measurement update using GPS/GNSS.
- * 6) `correctErrors()` — feed back estimated errors into the navigation state.
- * 7) `run()` — orchestrate the full step (mechanize → predict → update → correct).
- *
  * @author peanut-nav
  * @date Created: 2025-08-10
- * @last Modified: 2025-08-10
- * @version 0.3.3
+ * @last Modified: 2025-08-20
+ * @version 0.4.0
  */
 
 #pragma once
@@ -166,32 +156,6 @@ private:
     // UKF state
     UnscentedKalmanFilterParams ukf_;   ///< UKF covariance/weights and related configuration.
     Eigen::Vector3d last_f_INSt_;      ///< Previous specific force resolved in the nav frame [m/s²].
-
-    // UKF processing components
-
-    /**
-     * @brief Build the continuous-time linearized error-dynamics matrix.
-     *
-     * Constructs the 15×15 continuous error-state dynamics matrix `f` for the INS
-     * error model given current attitude, velocity, and kinematics. The canonical
-     * error-state ordering is often:
-     *   [δθ (3), δv (3), δp (3), gyro bias (3), accel bias (3)]^T
-     * but should match the configuration used in `UnscentedKalmanFilterParams`.
-     *
-     * @param Cnb Body-to-nav DCM (b→n).
-     * @param vn0 Velocity vector [Ve, Vn, Vu]^T (east, north, up).
-     * @param aibn Specific force resolved in the nav frame [m/s²].
-     * @param wie Earth rotation rate magnitude [rad/s].
-     * @param lat Geodetic latitude [rad].
-     * @param rxn Meridian radius Rx [m].
-     * @param ryn Transverse radius Ry [m].
-     * @return 15×15 continuous-time error-dynamics matrix `f`.
-     */
-    Eigen::Matrix<double,15,15> errorDynamics(
-    const Eigen::Matrix3d& Cnb,
-    const Eigen::Vector3d& vn0,   // [Ve, Vn, Vu]
-    const Eigen::Vector3d& aibn,  // f in n-frame
-    double wie, double lat, double rxn, double ryn);
     
     // Core algorithm implementations
 
@@ -277,39 +241,24 @@ private:
     double computeGravity(double Latitude, double h, const NavigationParams& params);
     
     // UKF-specific functions
-    // Continuous to discrete: Gz, and series-based discretization for Φ and Q
 
     /**
-     * @brief Build the process noise mapping matrix Gz (continuous-time).
-     *
-     * Constructs the continuous-time process noise mapping matrix such that
-     * the continuous process noise covariance satisfies:
-     *   Q_c = Gz * Q0 * Gzᵀ
-     * where `Q0` is the driving white-noise covariance.
-     *
-     * @param CtbM Body-to-navigation DCM (b→t), used to map sensor noise into the error state.
-     * @param Gz   Output noise mapping matrix.
+     * @brief Compute state derivative for continuous-time model
+     * 
+     * @return State derivative vector
      */
-    void buildGz(const Eigen::Matrix3d& CtbM, Eigen::MatrixXd& Gz) const;
+    Eigen::VectorXd computeStateDerivative(const Eigen::VectorXd& X, 
+                                          const Eigen::MatrixXd& parm);
 
     /**
-     * @brief Discretize error dynamics via matrix series expansion.
-     *
-     * Uses a truncated series (matrix exponential approximation) to obtain the
-     * discrete transition matrix Φ and process noise covariance Q from the
-     * continuous dynamics `f` and noise mapping (`Gz`, `Q0`) over the sample
-     * interval `Tao`.
-     *
-     * @param f   Continuous-time error-dynamics matrix.
-     * @param Tao Sample interval Δt [s].
-     * @param Gz  Continuous-time noise mapping matrix.
-     * @param Q0  Driving white-noise covariance (continuous-time).
-     * @param Fai Output discrete transition matrix Φ.
-     * @param Q   Output discrete process noise covariance Q.
+     * @brief Perform Runge-Kutta 4 integration
+     * 
+     * @return Predicted state
      */
-    void discretizeBySeries(const Eigen::MatrixXd& f, double Tao,
-                            const Eigen::MatrixXd& Gz, const Eigen::MatrixXd& Q0,
-                            Eigen::MatrixXd& Fai, Eigen::MatrixXd& Q) const;
+    Eigen::VectorXd rungeKutta4(const Eigen::VectorXd& X, 
+                               const Eigen::MatrixXd& Uparm, 
+                               double dt);
+
 
     /**
      * @brief Generate sigma points for the UKF.
@@ -346,6 +295,13 @@ private:
      */
     Eigen::MatrixXd buildMeasurementMatrix(double roll, double pitch, double yaw,
                                           double lat, double h, double Rx, double Ry);
+    
+    // Parameters for UKF prediction
+    Eigen::MatrixXd parm_old_;  ///< Parameters at start of prediction interval
+    Eigen::MatrixXd parm_mid_;  ///< Parameters at midpoint of prediction interval
+    Eigen::MatrixXd parm_new_;  ///< Parameters at end of prediction interval
+
+    Eigen::MatrixXd G_mid_;     ///< Noise input matrix at midpoint
 
     RtsSmoother rts_smoother_;  ///< RTS smoother instance for backward pass post-processing.
 };

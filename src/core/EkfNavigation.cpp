@@ -324,11 +324,6 @@ void EkfNavigation::computeJacobianMatrix(int i) {
  * @brief Discretize continuous-time system
  */
 void EkfNavigation::discretizeSystem(double dt) {
-    // Noise input matrix
-    MatrixXd G = MatrixXd::Zero(15, 6);
-    G.block<3,3>(0,0) = state_.CtbM;  // Gyro bias mapping
-    G.block<3,3>(3,3) = state_.CtbM;  // Accel bias mapping
-    
     // Discretize continuous-time model
     ltiDiscretize(ekf_.A, G_mid_, ekf_.Q, dt, ekf_.disA, ekf_.disQ);
 }

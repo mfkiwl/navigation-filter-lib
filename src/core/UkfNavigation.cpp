@@ -4,8 +4,8 @@
  *
  * @author peanut-nav
  * @date Created: 2025-08-10
- * @last Modified: 2025-08-10
- * @version 0.3.3
+ * @last Modified: 2025-08-20
+ * @version 0.4.0
  */
 
 #include "NavigationFactory.hpp"
@@ -66,20 +66,7 @@ void UkfNavigation::initialize(const NavParamsBase& base_params,
     ukf_.w(0) = ukf_.lambda / (ukf_.lambda + ukf_.Nk);
     for (int i=1;i<ukf_.w.size();++i)
         ukf_.w(i) = 1.0 / (2.0*(ukf_.lambda + ukf_.Nk));
-    
-    // ---- Initial continuous-time error dynamics f0 (no IMU integration at k=0) ----
-    // Use zero specific force for the very first linearization.
-    Vector3d aibb0(0,0,0);
-    Vector3d aibn0 = state_.CtbM * aibb0;                         // t==n
-    double rxn0 = params_.earth_params.Rx + state_.Altitude[0];
-    double ryn0 = params_.earth_params.Ry + state_.Altitude[0];
-    ukf_.f0 = errorDynamics(
-        state_.CtbM,                 // Cnb (note: here CtbM is n←b)
-        state_.Velocity[0], aibn0,
-        params_.earth_params.W_ie,
-        deg2rad(state_.Latitude[0]), rxn0, ryn0
-    );
-    
+
     // ---- Pre-size state trajectories and UKF matrices ----
     int totalPoints = state_.Latitude.size();
     state_.Velocity.resize(totalPoints, Vector3d::Zero());
@@ -87,81 +74,10 @@ void UkfNavigation::initialize(const NavParamsBase& base_params,
     state_.Roll.resize(totalPoints);
     state_.Yaw.resize(totalPoints);
     
-    ukf_.Fai = MatrixXd::Identity(15, 15);  // Discrete Φ
     ukf_.Q   = MatrixXd::Zero(15, 15);      // Discrete Qd
     ukf_.X_prop.resize(ukf_.Nk, 2*ukf_.Nk + 1);
     ukf_.X_pred.setZero(ukf_.Nk);
     ukf_.P_pred.setZero(ukf_.Nk, ukf_.Nk);
-}
-
-/**
- * @brief Continuous-time linearized INS error dynamics.
- */
-Eigen::Matrix<double,15,15> UkfNavigation::errorDynamics(
-    const Eigen::Matrix3d& Cnb,
-    const Eigen::Vector3d& vn0,   // [Ve, Vn, Vu] (E, N, U)
-    const Eigen::Vector3d& aibn,  // specific force in n-frame
-    double wie, double lat, double rxn, double ryn)
-{
-    using Mat = Eigen::Matrix<double,15,15>;
-    Mat f0 = Mat::Zero();
-
-    f0(0,1) =  wie*std::sin(lat) + vn0(0)/rxn*std::tan(lat);               // L3
-    f0(0,2) = -wie*std::cos(lat) - vn0(0)/rxn;                             // L4
-    f0(0,4) = -1.0/ryn;                                                    // L5
-    f0(0,8) =  vn0(1)/(ryn*ryn);                                           // L6
-
-    f0(1,0) = -wie*std::sin(lat) - vn0(0)/rxn*std::tan(lat);               // L7
-    f0(1,2) = -vn0(1)/ryn;                                                 // L8
-    f0(1,3) =  1.0/rxn;                                                    // L9
-    f0(1,6) = -wie*std::sin(lat);                                          // L10
-    f0(1,8) = -vn0(0)/(rxn*rxn);                                           // L11
-
-    f0(2,0) =  wie*std::cos(lat) + vn0(0)/rxn;                             // L12
-    f0(2,1) =  vn0(1)/ryn;                                                 // L13
-    f0(2,3) =  1.0/rxn*std::tan(lat);                                      // L14
-    f0(2,6) =  wie*std::cos(lat) + vn0(0)/rxn/(std::cos(lat)*std::cos(lat));// L15
-    f0(2,8) = -vn0(0)/(rxn*rxn)*std::tan(lat);                             // L16
-
-    f0(3,1) = -aibn(2);                                                    // L17
-    f0(3,2) =  aibn(1);                                                    // L18
-    f0(3,3) =  1.0/rxn*(vn0(1)*std::tan(lat)-vn0(2));                      // L19
-    f0(3,4) =  2*wie*std::sin(lat)+vn0(0)/rxn*std::tan(lat);               // L20
-    f0(3,5) = -2*wie*std::cos(lat)-vn0(0)/rxn;                             // L21
-    f0(3,6) =  2*wie*std::cos(lat)*vn0(1)+2*wie*std::sin(lat)*vn0(2)
-              +vn0(0)*vn0(1)/rxn/(std::cos(lat)*std::cos(lat));            // L22
-    f0(3,8) = (vn0(0)*vn0(2)-vn0(0)*vn0(1)*std::tan(lat))/(rxn*rxn);       // L23
-
-    f0(4,0) =  aibn(2);                                                    // L24
-    f0(4,2) = -aibn(0);                                                    // L25
-    f0(4,3) = -2*wie*std::sin(lat)-2*vn0(0)/rxn*std::tan(lat);             // L26
-    f0(4,4) = -vn0(2)/ryn;                                                 // L27
-    f0(4,5) = -vn0(1)/ryn;                                                 // L28
-    f0(4,6) = -vn0(0)*(2*wie*std::cos(lat)+vn0(0)/rxn/(std::cos(lat)*std::cos(lat))); // L29
-    f0(4,8) = (vn0(1)*vn0(2)+vn0(0)*vn0(0)*std::tan(lat))/(rxn*rxn);       // L30
-
-    f0(5,0) = -aibn(1);                                                    // L31
-    f0(5,1) =  aibn(0);                                                    // L32
-    f0(5,3) =  2*wie*std::cos(lat)+2*vn0(0)/rxn;                           // L33
-    f0(5,4) =  2*vn0(1)/ryn;                                               // L34
-    f0(5,6) = -2*wie*std::sin(lat)*vn0(0);                                 // L35
-    f0(5,8) = -(vn0(0)*vn0(0)+vn0(1)*vn0(1))/(rxn*rxn);                    // L36
-
-    f0(6,4) =  1.0/ryn;                                                    // L37
-    f0(6,8) = -vn0(1)/(ryn*ryn);                                           // L38
-    f0(7,3) =  1.0/rxn/std::cos(lat);                                      // L39
-    f0(7,6) =  std::tan(lat)/rxn/std::cos(lat)*vn0(0);                     // L19
-    f0(7,8) = -vn0(0)/(rxn*rxn)/std::cos(lat);                             // L20
-    f0(8,5) =  1.0;                                                        // L21
-
-    // Sensor bias mapping blocks (gyro/accel) via Cnb into attitude/velocity rows.
-    for (int i=0;i<3;i++){
-        for (int j=9;j<12;j++){
-            f0(i,  j) = Cnb(i, j-9);                                       // gyro bias to attitude
-            f0(i+3,j+3)= Cnb(i, j-9);                                      // accel bias to velocity
-        }
-    }
-    return f0;
 }
 
 // ================== Strapdown Inertial Navigation Update ==================
@@ -223,6 +139,46 @@ void UkfNavigation::updateStrapdown(const IMUData& imu, int i) {
     // Compute Euler angles from the updated DCM for logging/diagnostics.
     NavigationUtils::calculateEulerAngles(state_.CbtM, state_.Pitch[i+1], state_.Roll[i+1], state_.Yaw[i+1]);
     
+    // Store parameters at different points for UKF prediction
+    if (i == 0) {
+        // Initial parameters
+        parm_old_ = MatrixXd(6, 3);
+        parm_old_ << 1.0/params_.gps_rate, state_.Latitude[i+1]*M_PI/180.0, state_.Altitude[i+1],
+                     state_.Velocity[i+1](0), state_.Velocity[i+1](1), state_.Velocity[i+1](2),
+                     last_f_INSt_.transpose(),
+                     state_.CbtM;
+        
+        parm_mid_ = parm_old_;
+        parm_new_ = parm_old_;
+ 
+        // Initialize noise input matrix
+        G_mid_ = MatrixXd::Zero(15, 6);
+        G_mid_.block<3,3>(0,0) = state_.CtbM;  // Gyro bias mapping
+        G_mid_.block<3,3>(3,3) = state_.CtbM;  // Accel bias mapping
+    }
+    else if (i % 50 == 0 && i % 100 != 0) {
+        // Update midpoint parameters
+        parm_mid_ = MatrixXd(6, 3);
+        parm_mid_ << 1.0/params_.gps_rate, state_.Latitude[i+1]*M_PI/180.0, state_.Altitude[i+1],
+                     state_.Velocity[i+1](0), state_.Velocity[i+1](1), state_.Velocity[i+1](2),
+                     last_f_INSt_.transpose(),
+                     state_.CbtM;
+ 
+        // Update noise input matrix
+        G_mid_ = MatrixXd::Zero(15, 6);
+        G_mid_.block<3,3>(0,0) = state_.CtbM;
+        G_mid_.block<3,3>(3,3) = state_.CtbM;
+    }
+    
+    // Store end-point parameters at measurement steps
+    if (isMeasurementStep(i)) {
+        parm_new_ = MatrixXd(6, 3);
+        parm_new_ << 1.0/params_.gps_rate, state_.Latitude[i+1]*M_PI/180.0, state_.Altitude[i+1],
+                     state_.Velocity[i+1](0), state_.Velocity[i+1](1), state_.Velocity[i+1](2),
+                     last_f_INSt_.transpose(),
+                     state_.CbtM;
+    }
+
     // Lightweight progress indicator for long runs.
     if (i % 1000 == 0) {
         cout << "Processing: " << i << "/" << (state_.Latitude.size() - 1)
@@ -342,41 +298,154 @@ double UkfNavigation::computeGravity(double Latitude, double h, const Navigation
  * @brief UKF time update (propagation).
  */
 void UkfNavigation::predictState(int i) {
-    // --- 1) Endpoint-average continuous model f ≈ (f0 + f1)/2 for better accuracy ---
-    const double rxn = current_Rx_ + state_.Altitude[i+1];
-    const double ryn = current_Ry_ + state_.Altitude[i+1];
+    int k = ukf_.N_kalman;
 
-    Matrix<double,15,15> f1 = errorDynamics(
-        state_.CtbM,                 // Cnb (n←b)
-        state_.Velocity[i+1], last_f_INSt_,
-        params_.earth_params.W_ie,
-        deg2rad(state_.Latitude[i+1]), rxn, ryn
-    );
-    Matrix<double,15,15> f = (ukf_.f0 + f1) * 0.5;  // trapezoidal approx
-    ukf_.f0 = f1;                                   // store for next step
+    // Combine parameters for RK4 integration
+    MatrixXd Uparm(6, 9);
+    Uparm << parm_old_, parm_mid_, parm_new_;
 
-    // --- 2) Build Gz (process noise mapping) and discretize to Φ, Qd over sampling time ukf_.T ---
-    MatrixXd Gz = MatrixXd::Zero(ukf_.Nk, ukf_.Lk);
-    buildGz(state_.CtbM, Gz);
-    discretizeBySeries(f, ukf_.T /* sample interval for error-state */, Gz, ukf_.Q0, ukf_.Fai, ukf_.Q);
+    ukf_.Q = ukf_.T * (G_mid_ * ukf_.Q0 * G_mid_.transpose());
 
-    // --- 3) Unscented transform: generate sigma points and propagate linearly with Φ ---
-    const int L = 2*ukf_.Nk + 1;
+    // Unscented transform: generate sigma points
+    const int L = 2 * ukf_.Nk + 1;
     MatrixXd Xsig(ukf_.Nk, L);
     generateSigmaPoints(ukf_.X.col(ukf_.N_kalman-1), ukf_.P, ukf_.lambda, Xsig);
 
     ukf_.X_prop.resize(ukf_.Nk, L);
-    for (int c=0;c<L;++c) ukf_.X_prop.col(c) = ukf_.Fai * Xsig.col(c);
+    for (int c = 0; c < L; ++c) ukf_.X_prop.col(c) = rungeKutta4(Xsig.col(c), Uparm, ukf_.T);
 
-    // --- 4) Compute predicted mean and covariance (add process noise) ---
+    // Compute predicted mean and covariance
     ukf_.X_pred.setZero(ukf_.Nk);
-    for (int c=0;c<L;++c) ukf_.X_pred += ukf_.w(c) * ukf_.X_prop.col(c);
+    for (int c = 0; c < L; ++c) ukf_.X_pred += ukf_.w(c) * ukf_.X_prop.col(c);
 
     ukf_.P_pred = ukf_.Q;  // start with process noise
-    for (int c=0;c<L;++c) {
+    for (int c = 0; c < L; ++c) {
         VectorXd d = ukf_.X_prop.col(c) - ukf_.X_pred;
         ukf_.P_pred += ukf_.w(c) * (d * d.transpose());
     }
+
+    VectorXd x_post_prev = ukf_.X.col(ukf_.N_kalman-1);
+    ukf_.P_cross.setZero(ukf_.Nk, ukf_.Nk);
+    for (int c = 0; c < L; ++c) {
+        VectorXd d0 = Xsig.col(c) - x_post_prev;   // χ_{k-1} - x_{k-1|k-1}
+        VectorXd d1 = ukf_.X_prop.col(c) - ukf_.X_pred; // χ_k - x_{k|k-1}
+        ukf_.P_cross += ukf_.w(c) * (d0 * d1.transpose());
+    }
+}
+
+/**
+ * @brief Perform Runge-Kutta 4 integration
+ * 
+ * @return Predicted state
+ */
+Eigen::VectorXd UkfNavigation::rungeKutta4(const Eigen::VectorXd& X, 
+                                          const Eigen::MatrixXd& Uparm, 
+                                          double dt) {
+    // Extract parameters for RK4 stages
+    MatrixXd parm_old = Uparm.block<6,3>(0,0);
+    MatrixXd parm_mid = Uparm.block<6,3>(0,3);
+    MatrixXd parm_new = Uparm.block<6,3>(0,6);
+    
+    // RK4 stages
+    VectorXd k1 = computeStateDerivative(X, parm_old);
+    VectorXd k2 = computeStateDerivative(X + 0.5 * dt * k1, parm_mid);
+    VectorXd k3 = computeStateDerivative(X + 0.5 * dt * k2, parm_mid);
+    VectorXd k4 = computeStateDerivative(X + dt * k3, parm_new);
+    
+    return X + dt / 6.0 * (k1 + 2*k2 + 2*k3 + k4);
+}
+
+/**
+ * @brief Compute state derivative for continuous-time model
+ * 
+ * @return State derivative vector
+ */
+Eigen::VectorXd UkfNavigation::computeStateDerivative(const Eigen::VectorXd& X, 
+                                                     const Eigen::MatrixXd& parm) {
+    // Extract parameters
+    double TGPS = parm(0,0);
+    double Lat = parm(0,1);
+    double Hei = parm(0,2);
+    Vector3d V(parm(1,0), parm(1,1), parm(1,2));
+    Vector3d fn(parm(2,0), parm(2,1), parm(2,2));
+    Matrix3d Cnb = parm.block<3,3>(3,0);
+    
+    // Earth parameters
+    const double WIEE = 7.2921151467e-5;
+    const double Re = 6378135.072;
+    const double e = 1.0/298.25;
+    double Rmh = Re * (1 - 2 * e + 3 * e * sin(Lat) * sin(Lat)) + Hei;
+    double Rnh = Re * (1 + e * sin(Lat) * sin(Lat)) + Hei;
+    
+    // Extract states
+    double Atheta = X(0);  // Pitch error
+    double Agama = X(1);   // Roll error
+    double Afai = X(2);    // Yaw error
+    
+    // Linear part of state derivative
+    MatrixXd FN = MatrixXd::Zero(9,9);
+    FN(0,4) = -1.0 / Rmh;
+    FN(1,3) = 1.0 / Rnh;
+    FN(2,3) = 1.0 / Rnh * tan(Lat);
+    FN(1,6) = -WIEE * sin(Lat);
+    FN(2,6) = WIEE * cos(Lat) + V(0) / Rnh / pow(cos(Lat),2);
+    FN(0,8) = V(1) / pow(Rmh,2);
+    FN(1,8) = -V(0) / pow(Rnh,2);
+    FN(2,8) = -V(0) * tan(Lat) / pow(Rnh,2);
+    FN(3,3) = 1.0 / Rnh * (V(1) * tan(Lat) - V(2));
+    FN(3,4) = 2.0 * WIEE * sin(Lat) + V(0) / Rnh * tan(Lat);
+    FN(3,5) = -2.0 * WIEE * cos(Lat) - V(0) / Rnh;
+    FN(4,3) = -2.0 * WIEE * sin(Lat) - 2.0 * V(0) / Rnh * tan(Lat);
+    FN(4,4) = -V(2) / Rmh;
+    FN(4,5) = -V(1) / Rmh;
+    FN(5,3) = 2.0 * WIEE * cos(Lat) + 2.0 * V(0) / Rnh;
+    FN(5,4) = 2.0 * V(1) / Rmh;
+    FN(3,6) = 2.0 * WIEE * cos(Lat) * V(1) + 2.0 * WIEE * sin(Lat) * V(2) + 
+               V(0) * V(1) / Rnh / pow(cos(Lat),2);
+    FN(4,6) = -V(0) * (2.0 * WIEE * cos(Lat) + V(0) / Rnh / pow(cos(Lat),2));
+    FN(5,6) = -2.0 * WIEE * sin(Lat) * V(0);
+    FN(3,8) = (V(0) * V(2) - V(0) * V(1) * tan(Lat)) / pow(Rnh,2);
+    FN(4,8) = (V(1) * V(2) + pow(V(0),2) * tan(Lat)) / pow(Rnh,2);
+    FN(5,8) = -(pow(V(0),2) + pow(V(1),2)) / pow(Rnh,2);
+    FN(6,4) = 1.0 / Rmh;
+    FN(7,3) = 1.0 / (Rnh * cos(Lat));
+    FN(7,6) = tan(Lat) / (Rnh * cos(Lat)) * V(0);
+    FN(6,8) = -V(1) / pow(Rmh,2);
+    FN(7,8) = -V(0) / (pow(Rnh,2) * cos(Lat));
+    FN(8,5) = 1;
+    
+    // Sensor bias mapping
+    MatrixXd FS(9,6);
+    FS << Cnb.transpose(), MatrixXd::Zero(3,3),
+          MatrixXd::Zero(3,3), Cnb.transpose(),
+          MatrixXd::Zero(3,3), MatrixXd::Zero(3,3);
+    
+    // Assemble linear state derivative
+    MatrixXd F_linear = MatrixXd::Zero(15,15);
+    F_linear.block<9,9>(0,0) = FN;
+    F_linear.block<9,6>(0,9) = FS;
+    
+    // Nonlinear part of state derivative
+    VectorXd fx_nonlinear = VectorXd::Zero(15);
+    Matrix3d Cnp;
+    Cnp << cos(Agama)*cos(Afai)-sin(Agama)*sin(Atheta)*sin(Afai), 
+           cos(Agama)*sin(Afai)+sin(Agama)*sin(Atheta)*cos(Afai), 
+           -sin(Agama)*cos(Atheta),
+           -cos(Atheta)*sin(Afai), 
+           cos(Atheta)*cos(Afai), 
+           sin(Atheta),
+           sin(Agama)*cos(Afai)+cos(Agama)*sin(Atheta)*sin(Afai), 
+           sin(Agama)*sin(Afai)-cos(Agama)*sin(Atheta)*cos(Afai), 
+           cos(Agama)*cos(Atheta);
+    
+    Vector3d Wien(0, WIEE * cos(Lat), WIEE * sin(Lat));
+    Vector3d Wenn(-V(1) / Rmh, V(0) / Rnh, V(0) * tan(Lat) / Rnh);
+    Vector3d Winn = Wien + Wenn;
+    
+    fx_nonlinear.segment<3>(0) = (Matrix3d::Identity() - Cnp) * Winn;
+    fx_nonlinear.segment<3>(3) = (Matrix3d::Identity() - Cnp.transpose()) * fn;
+    
+    return F_linear * X + fx_nonlinear;
 }
 
 /**
@@ -400,46 +469,6 @@ void UkfNavigation::generateSigmaPoints(const VectorXd& x, const MatrixXd& P,
         VectorXd col = U.col(j) * scale;
         Xsig.col(1+j)         = x + col;
         Xsig.col(1+ukf_.Nk+j) = x - col;
-    }
-}
-
-/**
- * @brief Build continuous-time process noise mapping matrix Gz (for Φ/Qd).
- */
-void UkfNavigation::buildGz(const Eigen::Matrix3d& CtbM, MatrixXd& Gz) const {
-    // Map sensor white noises to attitude and velocity error subspaces (example: 3 gyro + 3 accel).
-    Gz.setZero(15,6);
-    Gz.block<3,3>(0,0) = CtbM;  // gyro noise → attitude error (n-frame)
-    Gz.block<3,3>(3,3) = CtbM;  // accel noise → velocity error (n-frame)
-}
-
-/**
- * @brief Discretize (f, Gz, Q0) → (Φ, Qd) via series expansion.
- */
-void UkfNavigation::discretizeBySeries(const MatrixXd& f, double Tao,
-                                       const MatrixXd& Gz, const MatrixXd& Q0,
-                                       MatrixXd& Fai, MatrixXd& Q) const
-{
-    const int n = f.rows();
-    MatrixXd I = MatrixXd::Identity(n,n);
-
-    // Φ ≈ exp(fΔt) ≈ I + Σ_{i=1..10} ((Δt f)^i / i!)  (truncated series)
-    Fai = I;
-    MatrixXd TF = MatrixXd::Identity(n,n);
-    for (int ii=1; ii<=10; ++ii){
-        TF = TF * (Tao * f) / double(ii);
-        Fai += TF;
-    }
-
-    // Discrete process noise Qd via series; start with Q1 = Gz Q0 Gzᵀ.
-    MatrixXd Q1 = Gz * Q0 * Gz.transpose();
-    MatrixXd M1 = Tao * Q1;
-    Q = M1;
-    for (int m=2; m<=30; ++m){
-        MatrixXd M2 = f * M1;
-        M1 = Tao * (M2 + M2.transpose()) / double(m);   // symmetrized higher-order terms
-        Q += M1;
-        if (M1.norm() < 1e-12) break;                  // early termination on convergence
     }
 }
 
@@ -564,6 +593,9 @@ void UkfNavigation::correctErrors(int i) {
     // Synchronize quaternion with corrected Euler angles for downstream use.
     state_.Quaternion = NavigationUtils::eulerToQuaternion(state_.Pitch[i+1], state_.Roll[i+1], state_.Yaw[i+1]);
  
+    // Update parameters for next prediction
+    parm_old_ = parm_new_;
+    
     // ========== Log history for RTS smoother (backward pass) ==========
     RtsSmoother::FilterHistory h;
     
@@ -572,7 +604,7 @@ void UkfNavigation::correctErrors(int i) {
     h.predicted_state       = ukf_.X_pred;
     h.covariance            = ukf_.P;
     h.predicted_covariance  = ukf_.P_pred;
-    h.transition_matrix     = ukf_.Fai;
+    h.cross_covariance      = ukf_.P_cross;
 
     // Snapshot of corrected navigation state (scalarized to single entry vectors).
     h.nav_state.Latitude  = {state_.Latitude[i+1]};

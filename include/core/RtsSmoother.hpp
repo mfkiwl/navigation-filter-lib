@@ -8,14 +8,15 @@
  *
  * @author peanut-nav
  * @date Created: 2025-08-04
- * @last Modified: 2025-08-04
- * @version 0.3.0
+ * @last Modified: 2025-08-20
+ * @version 0.4.0
  */
 
 #pragma once
 #include <vector>
 #include <Eigen/Dense>
 #include "../params/NavParamsBase.hpp"
+#include "FilterType.hpp"
 #include "MathUtils.hpp"
 
 class RtsSmoother {
@@ -26,7 +27,8 @@ public:
         Eigen::VectorXd predicted_state;     ///< Predicted state
         Eigen::MatrixXd covariance;          ///< Posterior covariance
         Eigen::MatrixXd predicted_covariance;///< Predicted covariance
-        Eigen::MatrixXd transition_matrix;   ///< State transition matrix
+        Eigen::MatrixXd transition_matrix;   ///< State transition matrix for KF/EKF
+        Eigen::MatrixXd cross_covariance;    ///< For UKF
         NavigationState nav_state;           ///< Navigation state snapshot
     };
 
@@ -57,7 +59,7 @@ public:
      * @param process_noise Process noise matrix (Q)
      * @return SmoothResult containing smoothed states and covariances
      */
-    SmoothResult smooth(const Eigen::MatrixXd& process_noise);
+    SmoothResult smooth(const Eigen::MatrixXd& process_noise, FilterType filterType);
     
     /**
      * @brief Generate navigation solution from smoothing results

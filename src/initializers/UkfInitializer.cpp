@@ -7,8 +7,8 @@
  *
  * @author peanut-nav
  * @date Created: 2025-08-10
- * @last Modified: 2025-08-10
- * @version 0.3.3
+ * @last Modified: 2025-08-20
+ * @version 0.4.0
  */
 
 #include "initializers/UkfInitializer.hpp"
@@ -133,7 +133,6 @@ void UkfInitializer::initialize_kalman(NavParamsBase& base_params, int totalPoin
     ukf_params.P_pred = Eigen::MatrixXd::Zero(15,15);  // Predicted covariance
 
     // Initialize state transition matrices
-    ukf_params.Fai    = Eigen::MatrixXd::Identity(15,15);  // State transition matrix
     ukf_params.Q = Eigen::MatrixXd::Zero(15, 15);          // Discrete process noise
 }
 

@@ -51,7 +51,7 @@ target_include_directories(DataLoader PUBLIC include)
 add_library(SystemInitializer 
     src/initializers/KfInitializer.cpp
     src/initializers/EkfInitializer.cpp
-    src/initializers/UkfInitializer.cpp       # <-- added UKF initializer
+    src/initializers/UkfInitializer.cpp
 )
 target_link_libraries(SystemInitializer MathUtils DataLoader)
 target_include_directories(SystemInitializer 

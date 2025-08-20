@@ -6,8 +6,8 @@
  *
  * @author peanut-nav
  * @date Created: 2025-08-11
- * @last Modified: 2025-08-11
- * @version 0.3.3
+ * @last Modified: 2025-08-20
+ * @version 0.4.0
  */
 
 #include "NavigationFactory.hpp"
@@ -175,7 +175,7 @@ int main() {
     }
     
     // Execute smoothing
-    RtsSmoother::SmoothResult smooth_result = rts_smoother.smooth(Q);
+    RtsSmoother::SmoothResult smooth_result = rts_smoother.smooth(Q, filterType);
 
     // Generate refined navigation solution using smoothing corrections
     NavigationState smoothed_state = rts_smoother.postProcessNavigation(
