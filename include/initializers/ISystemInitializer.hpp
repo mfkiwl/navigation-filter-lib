@@ -30,6 +30,15 @@ public:
      */
     virtual void initialize_params(NavParamsBase& base_params, 
                                   const std::string& dataDir) = 0;
+
+    // 新接口（默认回落到旧行为，确保其他实现类不必立刻修改）
+    virtual void initialize_params(NavParamsBase& base_params,
+                                   const std::string& dataDir,
+                                   bool useTruthInit)
+    {
+        (void)useTruthInit;
+        initialize_params(base_params, dataDir);
+    }
     
     /**
      * @brief Initialize navigation state
@@ -48,4 +57,13 @@ public:
      */
     virtual void initialize_kalman(NavParamsBase& base_params, 
                                   int totalPoints) = 0;
+
+    // 新接口（默认回落到旧行为，确保其他实现类不必立刻修改）
+    virtual void initialize_kalman(NavParamsBase& base_params, 
+                                    int totalPoints, 
+                                    bool positionOnly)
+    {
+        (void)positionOnly;
+        initialize_kalman(base_params, totalPoints);
+    }
 };

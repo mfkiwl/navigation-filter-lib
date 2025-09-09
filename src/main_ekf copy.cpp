@@ -19,13 +19,6 @@
 #include <memory>
 #include <cmath>
 
-// 小工具：角度差(度)解环到 [-180, 180]
-static inline double angdiff_deg(double a, double b) {
-    double d = std::fmod(a - b + 180.0, 360.0);
-    if (d < 0) d += 360.0;
-    return d - 180.0;
-}
-
 int main() {
     // Create the component using the factory pattern
     FilterType filterType = FilterType::EKF;
@@ -36,7 +29,7 @@ int main() {
     // System configuration parameters
     const int IMUrate = 200;     ///< IMU sampling rate (Hz)
     const int GPSrate = 1;       ///< GPS sampling rate (Hz)
-    const double simTime = 1616;  ///< Total simulation time (seconds)
+    const double simTime = 1400;  ///< Total simulation time (seconds)
     const std::string dataDir = "../data";  ///< Directory containing input datasets
     
     // Print system configuration parameters
@@ -51,8 +44,7 @@ int main() {
     IMUData imu;
     GPSData gps;
     TrajectoryData track;
-    DataLoader::loadData(dataDir, IMUrate, static_cast<int>(simTime), imu, gps, track,
-                         DatasetFormat::AwesomeGINS);
+    DataLoader::loadData(dataDir, IMUrate, simTime, imu, gps, track);
     std::cout << "Data loading completed: " << std::endl;
     std::cout << "  IMU points: " << imu.index.size() << std::endl;
     std::cout << "  GPS points: " << gps.time.size() << std::endl;
@@ -71,9 +63,9 @@ int main() {
     int totalPoints = static_cast<int>(simTime * IMUrate) + 1;
     
     // Initialize parameters and state
-    initializer->initialize_params(*base_params, dataDir, /*useTruthInit=*/true);
+    initializer->initialize_params(*base_params, dataDir);
     initializer->initialize_state(state, totalPoints);
-    initializer->initialize_kalman(*base_params, totalPoints, /*positionOnly=*/true);
+    initializer->initialize_kalman(*base_params, totalPoints);
     
     std::cout << "System initialization completed" << std::endl;
     std::cout << "Initial State: " << std::endl;

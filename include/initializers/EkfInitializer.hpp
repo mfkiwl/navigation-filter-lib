@@ -18,12 +18,18 @@ public:
     
     void initialize_params(NavParamsBase& base_params, 
                           const std::string& dataDir) override;
+
+    void initialize_params(NavParamsBase& base_params, 
+                          const std::string& dataDir, bool useTruthInit) override;
     
     void initialize_state(NavigationState& state, 
                          int totalPoints) override;
 
     void initialize_kalman(NavParamsBase& base_params, 
                           int totalPoints) override;
+
+    void initialize_kalman(NavParamsBase& base_params, 
+                          int totalPoints, bool positionOnly) override;
 
 private:
     // Configuration
@@ -48,12 +54,17 @@ private:
      * @param filePath Path to navigation data file
      */
     void loadInitialNavData(const std::string& filePath);
+
+    void loadInitialFromTruthNav(const std::string& truthNavPath);  // new: truth.nav
     
     /**
      * @brief Set up measurement noise covariance matrix
      * @return 6x6 measurement noise covariance matrix
      */
+    // 量测噪声（6D：速度3+位置3）
     Eigen::MatrixXd setupMeasurementNoise() const;
+    // 量测噪声（3D：仅位置 E/N/U）
+    Eigen::MatrixXd setupMeasurementNoisePosOnly() const;
     
     /**
      * @brief Set up process noise covariance matrix
